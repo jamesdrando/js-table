@@ -208,15 +208,16 @@ class VirtualGridTable {
     if (this._mode !== "chunked") return;
     const start = Math.max(0, startIndex | 0);
     const incoming = Array.isArray(rows) ? rows : [];
+    if (Number.isFinite(totalRows)) this.setChunkRowCount(totalRows, false);
+    const cap = this._chunkTotalRows > 0 ? this._chunkTotalRows : Number.MAX_SAFE_INTEGER;
 
     for (let i = 0; i < incoming.length; i += 1) {
       const viewIndex = start + i;
-      if (viewIndex >= this._chunkTotalRows) break;
+      if (viewIndex >= cap) break;
       this._chunkRows.set(viewIndex, this._toRowArray(incoming[i]));
     }
 
     this._clearPendingWindowsForRange(start, start + incoming.length);
-    if (Number.isFinite(totalRows)) this.setChunkRowCount(totalRows, false);
 
     this._recomputeView();
     this._renderAll();
@@ -643,7 +644,17 @@ class VirtualGridTable {
   _recomputeView() {
     if (this._mode === "chunked") {
       this._view = null;
-      this._viewCount = Math.max(0, this._chunkTotalRows | 0);
+      if (this._chunkTotalRows > 0) {
+        this._viewCount = Math.max(0, this._chunkTotalRows | 0);
+      } else if (this._chunkRows.size > 0) {
+        let maxIndex = -1;
+        for (const index of this._chunkRows.keys()) {
+          if (index > maxIndex) maxIndex = index;
+        }
+        this._viewCount = maxIndex + 1;
+      } else {
+        this._viewCount = 0;
+      }
       return;
     }
 
@@ -1419,7 +1430,13 @@ class VirtualGridTable {
   }
 
   _ensureChunkForViewport(reason) {
-    if (this._mode !== "chunked" || this._viewCount <= 0) return;
+    if (this._mode !== "chunked") return;
+    if (this._viewCount <= 0) {
+      if (this._chunkRows.size === 0) {
+        this._requestChunk(0, this._chunkSize, reason ?? "bootstrap");
+      }
+      return;
+    }
 
     const visibleRows = Math.max(1, Math.ceil(this._bodyH / this._opts.rowHeight));
     const windowRows = visibleRows + this._opts.overscan * 2;
@@ -1442,8 +1459,9 @@ class VirtualGridTable {
 
   _requestChunk(start, endExclusive, reason) {
     if (this._mode !== "chunked") return;
-    const safeStart = this._clamp(start | 0, 0, this._viewCount);
-    const safeEnd = this._clamp(endExclusive | 0, 0, this._viewCount);
+    const maxWindow = this._viewCount > 0 ? this._viewCount : Math.max(this._chunkSize, endExclusive | 0);
+    const safeStart = this._clamp(start | 0, 0, maxWindow);
+    const safeEnd = this._clamp(endExclusive | 0, 0, maxWindow);
     if (safeEnd <= safeStart) return;
     if (!this._windowHasMissingRows(safeStart, safeEnd)) return;
 
@@ -1597,11 +1615,51 @@ const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
   visibleCols: 6,
   overscan: 2,
-  demo_mode: true,
-  demo_rows: 5000000,
+  demo_mode: "chunked",
+  demo_rows: 50000,
 });
 
-if (grid._opts.demo_mode == true) {
+if (grid._opts.demo_mode === "chunked") {
+  grid.setLoading(true);
+  grid.setChunkMode({
+    columns: [
+      { key: "id", label: "id" },
+      { key: "title", label: "title" },
+      { key: "price", label: "price" },
+      { key: "category", label: "category" },
+      { key: "brand", label: "brand" },
+      { key: "rating", label: "rating" },
+      { key: "stock", label: "stock" },
+    ],
+    totalRows: 0,
+    chunkSize: 50,
+    async fetchChunk(request) {
+      const limit = request.size;
+      const skip = request.start;
+      const url = `https://dummyjson.com/products?limit=${limit}&skip=${skip}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Chunk fetch failed (${response.status}): ${url}`);
+      }
+
+      const payload = await response.json();
+      return {
+        start: payload.skip ?? skip,
+        totalRows: payload.total ?? 0,
+        rows: (payload.products ?? []).map((item) => [
+          item.id,
+          item.title,
+          item.price,
+          item.category,
+          item.brand,
+          item.rating,
+          item.stock,
+        ]),
+      };
+    },
+  });
+  grid.setLoading(false);
+} else if (grid._opts.demo_mode === true) {
   grid.setLoading(true);
 
   const demo = [];
@@ -1621,6 +1679,5 @@ if (grid._opts.demo_mode == true) {
     grid.setData(demo);
     grid.setLoading(false);
   }, 250);
-
 }
 
