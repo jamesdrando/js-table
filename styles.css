@@ -7,7 +7,7 @@ body {
 
 body {
   overflow: hidden;
-  background: #edf2f7;
+  background: #0b1220;
 }
 
 .app-shell {
@@ -29,24 +29,24 @@ body {
   --vgt-hscroll-h: 12px;
   --vgt-radius: 9px;
   --vgt-pad-x: 8px;
-  --vgt-border: #cfd8e3;
-  --vgt-bg: #fff;
-  --vgt-head-bg: linear-gradient(180deg, #edf2f8, #e4ebf4);
-  --vgt-hover: #edf4ff;
-  --vgt-muted: #5f6b7a;
+  --vgt-border: #2f3a4d;
+  --vgt-bg: #111827;
+  --vgt-head-bg: linear-gradient(180deg, #1b2433, #151d2a);
+  --vgt-hover: #1a2638;
+  --vgt-muted: #9aa9bf;
 
   width: 720px;
   height: 360px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: linear-gradient(180deg, #111827, #0f1726);
   border: 1px solid var(--vgt-border);
   border-radius: var(--vgt-radius);
   overflow: hidden;
   user-select: none;
   font: 13px/1.2 "Segoe UI", "Aptos", "Calibri", system-ui, sans-serif;
-  color: #111;
+  color: #e5e7eb;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 22px rgba(21, 41, 66, 0.1);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.55);
 }
 
 .vgt,
@@ -67,7 +67,7 @@ body {
   gap: 8px;
   padding: 0 8px;
   border-bottom: 1px solid var(--vgt-border);
-  background: linear-gradient(180deg, #f7f9fc, #eef3f8);
+  background: linear-gradient(180deg, #1a2332, #141d2b);
 }
 
 .vgt__btn {
@@ -75,7 +75,7 @@ body {
   background: transparent;
   cursor: pointer;
   font: inherit;
-  color: #111;
+  color: #d1d5db;
   opacity: 0.75;
 }
 
@@ -116,9 +116,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  border-right: 1px solid #d8e0ea;
+  border-right: 1px solid #2c3647;
   font-weight: 500;
-  color: #253246;
+  color: #dbe6f7;
 }
 
 .vgt__hcell:last-child {
@@ -126,7 +126,7 @@ body {
 }
 
 .vgt__hcell:hover {
-  background: rgba(37, 67, 104, 0.05);
+  background: rgba(124, 166, 219, 0.16);
 }
 
 .vgt__sort {
@@ -149,25 +149,25 @@ body {
 }
 
 .vgt__filterBtn {
-  border: 1px solid rgba(37, 67, 104, 0.22);
-  background: #f7fafc;
+  border: 1px solid rgba(156, 187, 231, 0.34);
+  background: #1e293b;
   border-radius: 6px;
   width: 18px;
   height: 18px;
   font: 11px/1 system-ui;
-  color: #2a3a52;
+  color: #d6e5fa;
   padding: 0;
   cursor: pointer;
 }
 
 .vgt__filterBtn[data-active="1"] {
-  background: #dbe9ff;
-  border-color: #7ea3d3;
-  color: #153a68;
+  background: #23344b;
+  border-color: #88aee2;
+  color: #e2efff;
 }
 
 .vgt__filterBtn:hover {
-  background: #ebf2fc;
+  background: #2a3a52;
 }
 
 .vgt__resizeHandle {
@@ -209,12 +209,12 @@ body {
   height: var(--vgt-row-h);
   display: grid;
   align-items: center;
-  border-bottom: 1px solid #e4e9f0;
+  border-bottom: 1px solid #263142;
   background: transparent;
 }
 
 .vgt__row:nth-child(even) {
-  background: #fafcff;
+  background: #131d2b;
 }
 
 .vgt__row:hover {
@@ -222,7 +222,7 @@ body {
 }
 
 .vgt__row[data-loading="1"] .vgt__cell {
-  color: #68778a;
+  color: #90a2bb;
 }
 
 .vgt__cell {
@@ -230,12 +230,21 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-right: 1px solid #e6ebf2;
-  color: #222d3c;
+  border-right: 1px solid #253041;
+  color: #e5ebf5;
+}
+
+.vgt__cell.vgt__cell--selected {
+  background: rgba(79, 156, 255, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(138, 197, 255, 0.9);
 }
 
 .vgt__cell:last-child {
   border-right: 0;
+}
+
+.vgt__rows.vgt__rows--selecting {
+  cursor: cell;
 }
 
 .vgt__scroll {
@@ -246,8 +255,8 @@ body {
   width: var(--vgt-scroll-w);
   display: grid;
   grid-template-rows: 18px 1fr 18px;
-  background: rgba(27, 49, 76, 0.05);
-  border-left: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(17, 24, 39, 0.88);
+  border-left: 1px solid rgba(133, 153, 184, 0.22);
   border-radius: 6px;
   overflow: visible;
   z-index: 2;
@@ -259,8 +268,8 @@ body {
   right: var(--vgt-scroll-w);
   bottom: 0;
   height: var(--vgt-hscroll-h);
-  background: rgba(27, 49, 76, 0.045);
-  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(17, 24, 39, 0.88);
+  border-top: 1px solid rgba(133, 153, 184, 0.22);
   z-index: 2;
 }
 
@@ -271,7 +280,7 @@ body {
   top: 1px;
   bottom: 1px;
   border-radius: 6px;
-  background: rgba(22, 48, 78, 0.16);
+  background: rgba(148, 163, 184, 0.2);
   overflow: hidden;
 }
 
@@ -282,14 +291,14 @@ body {
   left: 0;
   width: 64px;
   border-radius: 6px;
-  background: rgba(33, 62, 95, 0.78);
+  background: rgba(96, 165, 250, 0.52);
   cursor: pointer;
   touch-action: none;
   will-change: transform;
 }
 
 .vgt__hthumb:hover {
-  background: rgba(25, 49, 77, 0.92);
+  background: rgba(125, 185, 255, 0.72);
 }
 
 .vgt__corner {
@@ -298,15 +307,16 @@ body {
   bottom: 0;
   width: var(--vgt-scroll-w);
   height: var(--vgt-hscroll-h);
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  border-left: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(27, 49, 76, 0.05);
+  border-top: 1px solid rgba(133, 153, 184, 0.22);
+  border-left: 1px solid rgba(133, 153, 184, 0.22);
+  background: rgba(17, 24, 39, 0.88);
   z-index: 2;
 }
 
 .vgt__sbtn {
   border: 0;
   background: transparent;
+  color: #d7e3f6;
   cursor: pointer;
   opacity: 0.6;
   font: 12px/1 system-ui;
@@ -325,7 +335,7 @@ body {
   position: relative;
   margin: 2px 3px;
   border-radius: 6px;
-  background: rgba(22, 48, 78, 0.16);
+  background: rgba(148, 163, 184, 0.2);
   overflow: hidden;
 }
 
@@ -335,14 +345,14 @@ body {
   right: 0;
   height: 24px;
   border-radius: 6px;
-  background: rgba(33, 62, 95, 0.8);
+  background: rgba(96, 165, 250, 0.52);
   cursor: pointer;
   touch-action: none;
   will-change: transform;
 }
 
 .vgt__thumb:hover {
-  background: rgba(25, 49, 77, 0.92);
+  background: rgba(125, 185, 255, 0.72);
 }
 
 .vgt__overlay {
@@ -354,8 +364,8 @@ body {
   color: var(--vgt-muted);
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.92),
-    rgba(255, 255, 255, 0.92)
+    rgba(15, 23, 38, 0.92),
+    rgba(15, 23, 38, 0.92)
   );
   pointer-events: none;
 }
@@ -371,10 +381,10 @@ body {
   width: 220px;
   display: none;
   z-index: 10;
-  border: 1px solid #ccd7e4;
+  border: 1px solid #334155;
   border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 10px 24px rgba(24, 42, 67, 0.2);
+  background: #0f1726;
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.6);
   padding: 10px;
   gap: 8px;
 }
@@ -386,14 +396,16 @@ body {
 .vgt__filterTitle {
   font-size: 12px;
   font-weight: 600;
-  color: #2b3a4f;
+  color: #e2e8f0;
 }
 
 .vgt__filterOp,
 .vgt__filterInput {
-  border: 1px solid rgba(0, 0, 0, 0.16);
+  border: 1px solid #3a475d;
   border-radius: 8px;
   padding: 6px 8px;
+  background: #172133;
+  color: #e5ebf5;
   font: inherit;
   width: 100%;
 }
@@ -410,7 +422,7 @@ body {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   border-top: 1px solid var(--vgt-border);
-  background: linear-gradient(180deg, #f7f9fc, #edf2f7);
+  background: linear-gradient(180deg, #182233, #111b2b);
   padding: 0 8px;
   gap: 8px;
 }
@@ -437,10 +449,11 @@ body {
 }
 
 .vgt__pill {
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  background: linear-gradient(180deg, #fff, #f7f9fb);
+  border: 1px solid #3a475d;
+  background: linear-gradient(180deg, #1b2638, #141f30);
   border-radius: 8px;
   padding: 6px 10px;
+  color: #dbe7f7;
   font: inherit;
   cursor: pointer;
   opacity: 0.9;
@@ -466,19 +479,21 @@ body {
 }
 
 .vgt__searchSelect {
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  border: 1px solid #3a475d;
   border-radius: 8px;
   padding: 6px 8px;
-  background: #fff;
+  background: #172133;
+  color: #e5ebf5;
   font: inherit;
   max-width: 180px;
 }
 
 .vgt__searchInput {
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  border: 1px solid #3a475d;
   border-radius: 8px;
   padding: 6px 10px;
-  background: #fff;
+  background: #172133;
+  color: #e5ebf5;
   font: inherit;
   min-width: 0;
   width: 220px;
@@ -486,11 +501,15 @@ body {
   flex: 1 1 180px;
 }
 
+.vgt__searchInput::placeholder {
+  color: #93a5bf;
+}
+
 .vgt__searchSelect:focus,
 .vgt__searchInput:focus {
   outline: none;
-  border-color: #7fa5d6;
-  box-shadow: 0 0 0 2px rgba(87, 125, 177, 0.18);
+  border-color: #83b2ea;
+  box-shadow: 0 0 0 2px rgba(131, 178, 234, 0.28);
 }
 
 .vgt__navBtn {
@@ -555,5 +574,9 @@ body {
 
   .vgt__rows.vgt__rows--dragging {
     cursor: grabbing;
+  }
+
+  .vgt__rows.vgt__rows--selecting {
+    cursor: cell;
   }
 }

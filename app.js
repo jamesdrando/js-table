@@ -82,6 +82,10 @@ class VirtualGridTable {
     this._headerResize = null;
 
     this._loading = false;
+    this._selectionRange = null;
+    this._activePointerGesture = null;
+    this._longPressMs = 320;
+    this._touchMoveThreshold = 9;
 
     this._build();
     this._measure();
@@ -261,6 +265,7 @@ class VirtualGridTable {
 
   destroy() {
     this._ro?.disconnect();
+    this._cancelActivePointerGesture();
     this._closeFilterMenu();
     if (this._boundWindowPointerDown) {
       window.removeEventListener("pointerdown", this._boundWindowPointerDown, true);
@@ -316,6 +321,7 @@ class VirtualGridTable {
     this._scrollXPx = 0;
     this._scrollPx = 0;
     this._sort = null;
+    this._clearSelection(false);
   }
 
   _build() {
@@ -538,6 +544,13 @@ class VirtualGridTable {
 
     this._root.addEventListener("keydown", (event) => {
       const k = event.key;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && k.toLowerCase() === "c") {
+        if (this._hasSelection() && !this._isEditableTarget(event.target)) {
+          event.preventDefault();
+          this._copySelectionToClipboard();
+        }
+        return;
+      }
       if (k === "PageDown") {
         event.preventDefault();
         this._scrollBy(this._bodyH);
@@ -562,9 +575,15 @@ class VirtualGridTable {
       } else if (k === "ArrowLeft") {
         event.preventDefault();
         this._scrollXBy(-56);
-      } else if (k === "Escape" && this._filterMenuCol >= 0) {
-        event.preventDefault();
-        this._closeFilterMenu();
+      } else if (k === "Escape") {
+        if (this._hasSelection()) {
+          event.preventDefault();
+          this._clearSelection();
+        }
+        if (this._filterMenuCol >= 0) {
+          event.preventDefault();
+          this._closeFilterMenu();
+        }
       }
     });
 
@@ -583,7 +602,8 @@ class VirtualGridTable {
       const ratio = this._ratioFromHTrackX(event.clientX - rect.left);
       this._setScrollXPx(ratio * this._maxScrollXPx());
     });
-    this._rowsHost.addEventListener("pointerdown", (event) => this._rowsDragStart(event));
+    this._rowsHost.addEventListener("pointerdown", (event) => this._rowsPointerStart(event));
+    this._root.addEventListener("copy", (event) => this._onCopy(event));
     this._boundWindowPointerDown = (event) => this._windowPointerDown(event);
     window.addEventListener("pointerdown", this._boundWindowPointerDown, true);
     this._boundWindowResize = () => this._closeFilterMenu();
@@ -626,11 +646,13 @@ class VirtualGridTable {
       const rowEl = document.createElement("div");
       rowEl.className = "vgt__row";
       rowEl.dataset.pool = String(rowIndex);
+      rowEl.dataset.viewRow = "-1";
 
       const cellEls = [];
       for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
         const cell = document.createElement("div");
         cell.className = "vgt__cell";
+        cell.dataset.colIndex = String(colIndex);
         cell.textContent = "";
         rowEl.append(cell);
         cellEls.push(cell);
@@ -705,6 +727,7 @@ class VirtualGridTable {
   }
 
   _onQueryStateChanged(reason) {
+    this._clearSelection(false);
     if (this._mode === "chunked") {
       this._scrollPx = 0;
       this._rowStart = 0;
@@ -721,6 +744,7 @@ class VirtualGridTable {
   _clearChunkAndRequest(reason) {
     this._chunkRows.clear();
     this._chunkPending.clear();
+    this._clearSelection(false);
     this._nextChunkReason = reason ?? "query-change";
     this._recomputeView();
     this._renderAll();
@@ -1059,12 +1083,16 @@ class VirtualGridTable {
   }
 
   _windowPointerDown(event) {
-    if (this._filterMenuCol < 0) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (target.closest(".vgt__filterMenu")) return;
-    if (target.closest(".vgt__filterBtn")) return;
-    this._closeFilterMenu();
+    if (this._filterMenuCol >= 0) {
+      if (!target.closest(".vgt__filterMenu") && !target.closest(".vgt__filterBtn")) {
+        this._closeFilterMenu();
+      }
+    }
+    if (this._hasSelection() && !target.closest(".vgt__cell")) {
+      this._clearSelection();
+    }
   }
 
   _renderBody() {
@@ -1106,18 +1134,24 @@ class VirtualGridTable {
       if (baseIndex < 0) {
         slot.rowEl.style.visibility = "hidden";
         slot.baseIndex = -1;
+        slot.rowEl.dataset.baseIndex = "-1";
+        slot.rowEl.dataset.viewRow = "-1";
         continue;
       }
 
       slot.rowEl.style.visibility = "visible";
       slot.baseIndex = baseIndex;
+      slot.rowEl.dataset.baseIndex = String(baseIndex);
+      slot.rowEl.dataset.viewRow = String(viewIndex);
 
       const row = this._mode === "chunked" ? this._chunkRows.get(baseIndex) : this._rows[baseIndex] || [];
       const isChunkLoading = this._mode === "chunked" && !row;
       slot.rowEl.dataset.loading = isChunkLoading ? "1" : "0";
       for (let c = 0; c < slots; c += 1) {
         const value = row ? row[c] : c === 0 ? "Loading..." : "";
-        slot.cellEls[c].textContent = value == null ? "" : String(value);
+        const cellEl = slot.cellEls[c];
+        cellEl.textContent = value == null ? "" : String(value);
+        cellEl.classList.toggle("vgt__cell--selected", this._isCellSelected(viewIndex, c));
       }
     }
 
@@ -1380,32 +1414,68 @@ class VirtualGridTable {
     window.addEventListener("pointerup", onUp, { passive: true });
   }
 
-  _rowsDragStart(event) {
-    if (!this._isTouchDragEvent(event)) return;
+  _rowsPointerStart(event) {
     if (event.button !== 0 && event.button !== -1) return;
-    event.preventDefault();
+    const pointerType = event.pointerType || "mouse";
+    const startCell = this._cellFromEvent(event);
+    const isTouchLike = this._isTouchDragEvent(event);
 
-    const priorTouchAction = this._rowsHost.style.touchAction;
-    this._rowsHost.style.touchAction = "none";
-    this._rowsHost.classList.add("vgt__rows--dragging");
-    this._rowsHost.setPointerCapture(event.pointerId);
+    if (pointerType === "mouse") {
+      if (!startCell) {
+        this._clearSelection();
+        return;
+      }
+      event.preventDefault();
+      this._startSelectionDrag(event, startCell);
+      return;
+    }
 
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startScrollX = this._scrollXPx;
-    const startScrollY = this._scrollPx;
+    if (!isTouchLike) return;
+    this._startTouchGesture(event, startCell);
+  }
+
+  _isTouchDragEvent(event) {
+    if (!event) return false;
+    if (event.pointerType === "touch") return true;
+    if (event.pointerType === "mouse") {
+      return window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
+    }
+    if (event.pointerType === "pen") return true;
+    return window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
+  }
+
+  _cancelActivePointerGesture() {
+    if (!this._activePointerGesture) return;
+    if (Object.prototype.hasOwnProperty.call(this._activePointerGesture, "priorTouchAction")) {
+      this._rowsHost.style.touchAction = this._activePointerGesture.priorTouchAction;
+    }
+    if (this._activePointerGesture.timer) {
+      window.clearTimeout(this._activePointerGesture.timer);
+    }
+    this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
+    this._activePointerGesture = null;
+  }
+
+  _startSelectionDrag(event, startCell) {
+    this._activePointerGesture = null;
+    this._setSelectionRange(startCell, startCell);
+    this._root.focus({ preventScroll: true });
+    this._rowsHost.classList.add("vgt__rows--selecting");
+    try {
+      this._rowsHost.setPointerCapture(event.pointerId);
+    } catch (err) {
+      void err;
+    }
 
     const onMove = (moveEvent) => {
+      const nextCell = this._cellFromClientPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!nextCell) return;
       moveEvent.preventDefault();
-      const dx = moveEvent.clientX - startX;
-      const dy = moveEvent.clientY - startY;
-      this._setScrollXPx(startScrollX - dx);
-      this._setScrollPx(startScrollY - dy);
+      this._setSelectionRange(startCell, nextCell);
     };
 
     const onUp = () => {
-      this._rowsHost.style.touchAction = priorTouchAction;
-      this._rowsHost.classList.remove("vgt__rows--dragging");
+      this._rowsHost.classList.remove("vgt__rows--selecting");
       try {
         this._rowsHost.releasePointerCapture(event.pointerId);
       } catch (err) {
@@ -1419,14 +1489,211 @@ class VirtualGridTable {
     window.addEventListener("pointerup", onUp, { passive: true });
   }
 
-  _isTouchDragEvent(event) {
-    if (!event) return false;
-    if (event.pointerType === "touch") return true;
-    if (event.pointerType === "mouse") {
-      return window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
+  _startTouchGesture(event, startCell) {
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startScrollX = this._scrollXPx;
+    const startScrollY = this._scrollPx;
+    const priorTouchAction = this._rowsHost.style.touchAction;
+
+    const gesture = {
+      mode: startCell ? "pending" : "scroll",
+      timer: null,
+      startCell,
+      startX,
+      startY,
+      pointerId,
+      priorTouchAction,
+    };
+    this._activePointerGesture = gesture;
+
+    if (gesture.mode === "pending") {
+      gesture.timer = window.setTimeout(() => {
+        if (this._activePointerGesture !== gesture || gesture.mode !== "pending") return;
+        gesture.mode = "select";
+        this._rowsHost.classList.add("vgt__rows--selecting");
+        this._setSelectionRange(startCell, startCell);
+      }, this._longPressMs);
+    } else {
+      this._rowsHost.classList.add("vgt__rows--dragging");
     }
-    if (event.pointerType === "pen") return true;
-    return window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
+
+    this._rowsHost.style.touchAction = "none";
+    try {
+      this._rowsHost.setPointerCapture(pointerId);
+    } catch (err) {
+      void err;
+    }
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const dist = Math.max(Math.abs(dx), Math.abs(dy));
+
+      if (gesture.mode === "pending") {
+        if (dist < this._touchMoveThreshold) return;
+        gesture.mode = "scroll";
+        if (gesture.timer) window.clearTimeout(gesture.timer);
+        this._rowsHost.classList.add("vgt__rows--dragging");
+      }
+
+      if (gesture.mode === "scroll") {
+        moveEvent.preventDefault();
+        this._setScrollXPx(startScrollX - dx);
+        this._setScrollPx(startScrollY - dy);
+        return;
+      }
+
+      if (gesture.mode === "select") {
+        const nextCell = this._cellFromClientPoint(moveEvent.clientX, moveEvent.clientY);
+        if (!nextCell) return;
+        moveEvent.preventDefault();
+        this._setSelectionRange(startCell, nextCell);
+      }
+    };
+
+    const onUp = () => {
+      if (gesture.timer) window.clearTimeout(gesture.timer);
+      if (gesture.mode === "pending" && startCell) {
+        this._setSelectionRange(startCell, startCell);
+      }
+      this._rowsHost.style.touchAction = priorTouchAction;
+      this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
+      this._activePointerGesture = null;
+      try {
+        this._rowsHost.releasePointerCapture(pointerId);
+      } catch (err) {
+        void err;
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: true });
+  }
+
+  _cellFromEvent(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return null;
+    return this._cellFromElement(target);
+  }
+
+  _cellFromClientPoint(clientX, clientY) {
+    const element = document.elementFromPoint(clientX, clientY);
+    if (!(element instanceof Element)) return null;
+    return this._cellFromElement(element);
+  }
+
+  _cellFromElement(element) {
+    const cellEl = element.closest(".vgt__cell");
+    if (!cellEl || !this._rowsHost.contains(cellEl)) return null;
+    const rowEl = cellEl.closest(".vgt__row");
+    if (!rowEl) return null;
+    const viewRow = Number(rowEl.dataset.viewRow);
+    const colIndex = Number(cellEl.dataset.colIndex);
+    if (!Number.isFinite(viewRow) || viewRow < 0 || !Number.isFinite(colIndex) || colIndex < 0) return null;
+    return { row: viewRow, col: colIndex };
+  }
+
+  _setSelectionRange(anchorCell, focusCell) {
+    const rowA = anchorCell.row | 0;
+    const rowB = focusCell.row | 0;
+    const colA = anchorCell.col | 0;
+    const colB = focusCell.col | 0;
+    this._selectionRange = {
+      rowMin: Math.min(rowA, rowB),
+      rowMax: Math.max(rowA, rowB),
+      colMin: Math.min(colA, colB),
+      colMax: Math.max(colA, colB),
+    };
+    this._renderBody();
+  }
+
+  _clearSelection(rerender = true) {
+    if (!this._selectionRange) return;
+    this._selectionRange = null;
+    if (rerender) this._renderBody();
+  }
+
+  _hasSelection() {
+    return Boolean(this._selectionRange);
+  }
+
+  _isCellSelected(viewRow, colIndex) {
+    const range = this._selectionRange;
+    if (!range) return false;
+    return (
+      viewRow >= range.rowMin &&
+      viewRow <= range.rowMax &&
+      colIndex >= range.colMin &&
+      colIndex <= range.colMax
+    );
+  }
+
+  _isEditableTarget(target) {
+    if (!(target instanceof Element)) return false;
+    const tag = target.tagName;
+    return (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT" ||
+      Boolean(target.closest("[contenteditable]"))
+    );
+  }
+
+  _onCopy(event) {
+    if (!this._hasSelection()) return;
+    const text = this._selectionToTsv();
+    if (!text) return;
+    event.preventDefault();
+    if (event.clipboardData) {
+      event.clipboardData.setData("text/plain", text);
+    }
+  }
+
+  _copySelectionToClipboard() {
+    const text = this._selectionToTsv();
+    if (!text) return;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(text).catch(() => {
+        this._fallbackCopyText(text);
+      });
+      return;
+    }
+    this._fallbackCopyText(text);
+  }
+
+  _fallbackCopyText(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "readonly");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.append(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+
+  _selectionToTsv() {
+    if (!this._selectionRange) return "";
+    const { rowMin, rowMax, colMin, colMax } = this._selectionRange;
+    const out = [];
+    for (let viewRow = rowMin; viewRow <= rowMax; viewRow += 1) {
+      const baseIndex = this._viewIndexToBase(viewRow);
+      if (baseIndex < 0) continue;
+      const sourceRow = this._mode === "chunked" ? this._chunkRows.get(baseIndex) : this._rows[baseIndex];
+      const row = sourceRow || [];
+      const rowOut = [];
+      for (let col = colMin; col <= colMax; col += 1) {
+        const value = row[col];
+        rowOut.push(value == null ? "" : String(value));
+      }
+      out.push(rowOut.join("\t"));
+    }
+    return out.join("\n");
   }
 
   _ensureChunkForViewport(reason) {
@@ -1615,8 +1882,8 @@ const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
   visibleCols: 6,
   overscan: 2,
-  demo_mode: "chunked",
-  demo_rows: 50000,
+  demo_mode: true,
+  demo_rows: 5000000,
 });
 
 if (grid._opts.demo_mode === "chunked") {
