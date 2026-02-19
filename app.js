@@ -1491,7 +1491,13 @@ class VirtualGridTable {
 
   _rowsPointerStart(event) {
     if (event.button !== 0 && event.button !== -1) return;
+    if (this._activePointerGesture) this._cancelActivePointerGesture();
     const startCell = this._cellFromEvent(event);
+    if (this._isTouchDragEvent(event)) {
+      event.preventDefault();
+      this._startTouchGesture(event, startCell);
+      return;
+    }
     if (!startCell) {
       this._clearSelection();
       return;
@@ -1681,14 +1687,20 @@ class VirtualGridTable {
 
   _cancelActivePointerGesture() {
     if (!this._activePointerGesture) return;
-    if (Object.prototype.hasOwnProperty.call(this._activePointerGesture, "priorTouchAction")) {
-      this._rowsHost.style.touchAction = this._activePointerGesture.priorTouchAction;
-    }
-    if (this._activePointerGesture.timer) {
-      window.clearTimeout(this._activePointerGesture.timer);
-    }
-    this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
+    const gesture = this._activePointerGesture;
     this._activePointerGesture = null;
+    if (typeof gesture.cleanup === "function") {
+      gesture.cleanup();
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(gesture, "priorTouchAction")) {
+      this._rowsHost.style.touchAction = gesture.priorTouchAction;
+    }
+    if (gesture.timer) {
+      window.clearTimeout(gesture.timer);
+    }
+    if (gesture.rafId) window.cancelAnimationFrame(gesture.rafId);
+    this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
   }
 
   _startSelectionDrag(event, startCell) {
@@ -1806,15 +1818,86 @@ class VirtualGridTable {
       startY,
       pointerId,
       priorTouchAction,
+      cleanup: null,
+      rafId: 0,
     };
     this._activePointerGesture = gesture;
+
+    const state = {
+      active: true,
+      lastClientX: startX,
+      lastClientY: startY,
+      vScrollX: 0,
+      vScrollY: 0,
+      rafId: 0,
+    };
+
+    const edgeThreshold = 30;
+    const maxEdgeScrollPerFrame = 22;
+
+    const updateSelectionFromPointer = (shouldScheduleRaf) => {
+      if (!startCell) return;
+
+      const rect = this._rowsHost.getBoundingClientRect();
+      const leftEdge = rect.left + edgeThreshold;
+      const rightEdge = rect.right - edgeThreshold;
+      const topEdge = rect.top + edgeThreshold;
+      const bottomEdge = rect.bottom - edgeThreshold;
+
+      if (state.lastClientX < leftEdge) {
+        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
+        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientX > rightEdge) {
+        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
+        state.vScrollX = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScrollX = 0;
+      }
+
+      if (state.lastClientY < topEdge) {
+        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
+        state.vScrollY = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientY > bottomEdge) {
+        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
+        state.vScrollY = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScrollY = 0;
+      }
+
+      const nextCell = this._cellFromClientPointClamped(state.lastClientX, state.lastClientY);
+      if (nextCell) this._setSelectionRange(startCell, nextCell);
+
+      if (
+        shouldScheduleRaf &&
+        state.rafId === 0 &&
+        (state.vScrollX !== 0 || state.vScrollY !== 0)
+      ) {
+        state.rafId = window.requestAnimationFrame(onFrame);
+      }
+    };
+
+    const onFrame = () => {
+      state.rafId = 0;
+      if (!state.active || gesture.mode !== "select") return;
+      if (state.vScrollX !== 0) this._setScrollXPx(this._scrollXPx + state.vScrollX);
+      if (state.vScrollY !== 0) this._setScrollPx(this._scrollPx + state.vScrollY);
+      updateSelectionFromPointer(true);
+    };
+
+    const beginSelectionMode = () => {
+      if (!startCell || !state.active) return;
+      gesture.mode = "select";
+      this._rowsHost.classList.remove("vgt__rows--dragging");
+      this._rowsHost.classList.add("vgt__rows--selecting");
+      this._setSelectionRange(startCell, startCell);
+      this._root.focus({ preventScroll: true });
+      updateSelectionFromPointer(true);
+    };
 
     if (gesture.mode === "pending") {
       gesture.timer = window.setTimeout(() => {
         if (this._activePointerGesture !== gesture || gesture.mode !== "pending") return;
-        gesture.mode = "select";
-        this._rowsHost.classList.add("vgt__rows--selecting");
-        this._setSelectionRange(startCell, startCell);
+        beginSelectionMode();
       }, this._longPressMs);
     } else {
       this._rowsHost.classList.add("vgt__rows--dragging");
@@ -1827,7 +1910,41 @@ class VirtualGridTable {
       void err;
     }
 
-    const onMove = (moveEvent) => {
+    let cleaned = false;
+    let onMove = null;
+    let onUp = null;
+
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      state.active = false;
+      if (gesture.timer) {
+        window.clearTimeout(gesture.timer);
+        gesture.timer = null;
+      }
+      if (state.rafId) {
+        window.cancelAnimationFrame(state.rafId);
+        state.rafId = 0;
+      }
+      this._rowsHost.style.touchAction = priorTouchAction;
+      this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
+      if (this._activePointerGesture === gesture) this._activePointerGesture = null;
+      try {
+        this._rowsHost.releasePointerCapture(pointerId);
+      } catch (err) {
+        void err;
+      }
+      if (onMove) window.removeEventListener("pointermove", onMove);
+      if (onUp) {
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      }
+    };
+    gesture.cleanup = cleanup;
+
+    onMove = (moveEvent) => {
+      state.lastClientX = moveEvent.clientX;
+      state.lastClientY = moveEvent.clientY;
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
       const dist = Math.max(Math.abs(dx), Math.abs(dy));
@@ -1847,44 +1964,24 @@ class VirtualGridTable {
       }
 
       if (gesture.mode === "select") {
-        const nextCell = this._cellFromClientPoint(moveEvent.clientX, moveEvent.clientY);
-        if (!nextCell) return;
         moveEvent.preventDefault();
-        this._setSelectionRange(startCell, nextCell);
+        updateSelectionFromPointer(true);
       }
     };
 
-    const onUp = () => {
-      if (gesture.timer) window.clearTimeout(gesture.timer);
-      if (gesture.mode === "pending" && startCell) {
-        this._setSelectionRange(startCell, startCell);
-      }
-      this._rowsHost.style.touchAction = priorTouchAction;
-      this._rowsHost.classList.remove("vgt__rows--dragging", "vgt__rows--selecting");
-      this._activePointerGesture = null;
-      try {
-        this._rowsHost.releasePointerCapture(pointerId);
-      } catch (err) {
-        void err;
-      }
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+    onUp = () => {
+      cleanup();
     };
 
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
   }
 
   _cellFromEvent(event) {
     const target = event.target;
     if (!(target instanceof Element)) return null;
     return this._cellFromElement(target);
-  }
-
-  _cellFromClientPoint(clientX, clientY) {
-    const element = document.elementFromPoint(clientX, clientY);
-    if (!(element instanceof Element)) return null;
-    return this._cellFromElement(element);
   }
 
   _cellFromClientPointClamped(clientX, clientY) {
@@ -1952,12 +2049,6 @@ class VirtualGridTable {
     const target = event.target;
     if (!(target instanceof Element)) return -1;
     return this._rowFromBumperElement(target);
-  }
-
-  _rowFromBumperClientPoint(clientX, clientY) {
-    const element = document.elementFromPoint(clientX, clientY);
-    if (!(element instanceof Element)) return -1;
-    return this._rowFromBumperElement(element);
   }
 
   _rowFromBumperClientPointClamped(clientY) {
