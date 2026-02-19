@@ -25,7 +25,8 @@ body {
   --vgt-row-h: 28px;
   --vgt-head-h: 34px;
   --vgt-toolbar-h: 40px;
-  --vgt-scroll-w: 22px;
+  --vgt-bumper-w: 26px;
+  --vgt-scroll-w: 24px;
   --vgt-hscroll-h: 12px;
   --vgt-radius: 9px;
   --vgt-pad-x: 8px;
@@ -46,12 +47,18 @@ body {
   color: #e5e7eb;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.55);
+  box-shadow: none;
 }
 
 .vgt,
 .vgt * {
   box-sizing: border-box;
+}
+
+.vgt:focus,
+.vgt:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .vgt__top {
@@ -96,9 +103,37 @@ body {
   background: var(--vgt-head-bg);
 }
 
-.vgt__headInner {
+.vgt__headBumper {
   position: absolute;
   left: 0;
+  top: 0;
+  width: var(--vgt-bumper-w);
+  height: 100%;
+  border: 0;
+  border-right: 1px solid #2c3647;
+  border-bottom: 1px solid #2c3647;
+  background: linear-gradient(180deg, #23314a, #1a273c);
+  cursor: pointer;
+  padding: 0;
+}
+
+.vgt__headBumper:hover {
+  background: linear-gradient(180deg, #2b3d5c, #20314b);
+}
+
+.vgt__headBumper:focus,
+.vgt__rowBumper:focus {
+  outline: none;
+}
+
+.vgt__headBumper[data-active="1"] {
+  background: linear-gradient(180deg, #3c6ea5, #2a5b93);
+  box-shadow: inset 0 0 0 1px rgba(153, 208, 255, 0.9);
+}
+
+.vgt__headInner {
+  position: absolute;
+  left: var(--vgt-bumper-w);
   top: 0;
   height: 100%;
   display: grid;
@@ -188,13 +223,33 @@ body {
 
 .vgt__rows {
   position: absolute;
-  left: 0;
+  left: var(--vgt-bumper-w);
   right: var(--vgt-scroll-w);
   top: 0;
   bottom: var(--vgt-hscroll-h);
   overflow: hidden;
   z-index: 1;
   touch-action: auto;
+}
+
+.vgt__rowBumpers {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: var(--vgt-hscroll-h);
+  width: var(--vgt-bumper-w);
+  overflow: hidden;
+  z-index: 1;
+  border-right: 1px solid #2f3f56;
+  background: linear-gradient(180deg, #152136, #111b2d);
+}
+
+.vgt__rowBumpersInner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  will-change: transform;
 }
 
 .vgt__rowsInner {
@@ -205,10 +260,36 @@ body {
   will-change: transform;
 }
 
+.vgt__rowBumper {
+  display: block;
+  width: 100%;
+  height: var(--vgt-row-h);
+  margin: 0;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 1px solid #263142;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.vgt__rowBumper:hover {
+  background: rgba(124, 166, 219, 0.22);
+}
+
+.vgt__rowBumper[data-selected="1"] {
+  background: rgba(79, 156, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(138, 197, 255, 0.9);
+}
+
+.vgt__rowBumpers.vgt__rows--selecting {
+  cursor: cell;
+}
+
 .vgt__row {
   height: var(--vgt-row-h);
   display: grid;
-  align-items: center;
+  align-items: stretch;
   border-bottom: 1px solid #263142;
   background: transparent;
 }
@@ -227,6 +308,8 @@ body {
 
 .vgt__cell {
   padding: 0 var(--vgt-pad-x);
+  display: flex;
+  align-items: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -264,7 +347,7 @@ body {
 
 .vgt__hscroll {
   position: absolute;
-  left: 0;
+  left: var(--vgt-bumper-w);
   right: var(--vgt-scroll-w);
   bottom: 0;
   height: var(--vgt-hscroll-h);
@@ -568,12 +651,18 @@ body {
 }
 
 @media (pointer: coarse) {
-  .vgt__rows {
+  .vgt {
+    --vgt-scroll-w: 34px;
+    --vgt-hscroll-h: 18px;
+  }
+
+  .vgt__rows,
+  .vgt__rowBumpers {
     touch-action: none;
   }
 
-  .vgt__rows.vgt__rows--dragging {
-    cursor: grabbing;
+  .vgt__sbtn {
+    font-size: 14px;
   }
 
   .vgt__rows.vgt__rows--selecting {

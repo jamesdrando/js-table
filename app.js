@@ -343,10 +343,17 @@ class VirtualGridTable {
     head.className = "vgt__head";
     this._head = head;
 
+    const headBumper = document.createElement("button");
+    headBumper.className = "vgt__headBumper";
+    headBumper.type = "button";
+    headBumper.title = "Select all";
+    headBumper.setAttribute("aria-label", "Select all cells");
+    this._headBumper = headBumper;
+
     const headInner = document.createElement("div");
     headInner.className = "vgt__headInner";
     this._headInner = headInner;
-    head.append(headInner);
+    head.append(headBumper, headInner);
 
     const mid = document.createElement("div");
     mid.className = "vgt__mid";
@@ -355,6 +362,15 @@ class VirtualGridTable {
     const rowsHost = document.createElement("div");
     rowsHost.className = "vgt__rows";
     this._rowsHost = rowsHost;
+
+    const rowBumpers = document.createElement("div");
+    rowBumpers.className = "vgt__rowBumpers";
+    this._rowBumpers = rowBumpers;
+
+    const rowBumpersInner = document.createElement("div");
+    rowBumpersInner.className = "vgt__rowBumpersInner";
+    this._rowBumpersInner = rowBumpersInner;
+    rowBumpers.append(rowBumpersInner);
 
     const rowsInner = document.createElement("div");
     rowsInner.className = "vgt__rowsInner";
@@ -401,7 +417,7 @@ class VirtualGridTable {
     overlay.textContent = "No data to display";
     this._overlay = overlay;
 
-    mid.append(rowsHost, scroll, hscroll, corner, overlay);
+    mid.append(rowBumpers, rowsHost, scroll, hscroll, corner, overlay);
 
     const footer = document.createElement("div");
     footer.className = "vgt__footer";
@@ -602,7 +618,12 @@ class VirtualGridTable {
       const ratio = this._ratioFromHTrackX(event.clientX - rect.left);
       this._setScrollXPx(ratio * this._maxScrollXPx());
     });
+    this._headBumper.addEventListener("click", (event) => {
+      event.preventDefault();
+      this._selectAllCells();
+    });
     this._rowsHost.addEventListener("pointerdown", (event) => this._rowsPointerStart(event));
+    this._rowBumpers.addEventListener("pointerdown", (event) => this._rowBumperPointerStart(event));
     this._root.addEventListener("copy", (event) => this._onCopy(event));
     this._boundWindowPointerDown = (event) => this._windowPointerDown(event);
     window.addEventListener("pointerdown", this._boundWindowPointerDown, true);
@@ -641,12 +662,20 @@ class VirtualGridTable {
     this._renderRows = poolRows;
     this._rowEls = [];
     this._rowsInner.innerHTML = "";
+    this._rowBumpersInner.innerHTML = "";
 
     for (let rowIndex = 0; rowIndex < poolRows; rowIndex += 1) {
       const rowEl = document.createElement("div");
       rowEl.className = "vgt__row";
       rowEl.dataset.pool = String(rowIndex);
       rowEl.dataset.viewRow = "-1";
+
+      const bumperEl = document.createElement("button");
+      bumperEl.className = "vgt__rowBumper";
+      bumperEl.type = "button";
+      bumperEl.dataset.pool = String(rowIndex);
+      bumperEl.dataset.viewRow = "-1";
+      bumperEl.setAttribute("aria-label", "Select row");
 
       const cellEls = [];
       for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
@@ -659,7 +688,8 @@ class VirtualGridTable {
       }
 
       this._rowsInner.append(rowEl);
-      this._rowEls.push({ rowEl, cellEls, baseIndex: -1 });
+      this._rowBumpersInner.append(bumperEl);
+      this._rowEls.push({ rowEl, cellEls, bumperEl, baseIndex: -1 });
     }
   }
 
@@ -997,6 +1027,8 @@ class VirtualGridTable {
       handle.addEventListener("pointerdown", (event) => this._startHeaderResize(event, abs));
       headerCell.append(handle);
     }
+
+    this._syncHeadBumperState();
   }
 
   _renderSearchOptions() {
@@ -1090,7 +1122,7 @@ class VirtualGridTable {
         this._closeFilterMenu();
       }
     }
-    if (this._hasSelection() && !target.closest(".vgt__cell")) {
+    if (this._hasSelection() && !target.closest(".vgt__cell") && !target.closest(".vgt__rowBumper")) {
       this._clearSelection();
     }
   }
@@ -1121,6 +1153,7 @@ class VirtualGridTable {
       "px, " +
       (-subPx - appliedRowOverscan * rowHeight) +
       "px)";
+    this._rowBumpersInner.style.transform = "translateY(" + (-subPx - appliedRowOverscan * rowHeight) + "px)";
     this._rowsInner.style.width = contentW + "px";
 
     for (let i = 0; i < this._rowEls.length; i += 1) {
@@ -1133,16 +1166,22 @@ class VirtualGridTable {
 
       if (baseIndex < 0) {
         slot.rowEl.style.visibility = "hidden";
+        slot.bumperEl.style.visibility = "hidden";
         slot.baseIndex = -1;
         slot.rowEl.dataset.baseIndex = "-1";
         slot.rowEl.dataset.viewRow = "-1";
+        slot.bumperEl.dataset.viewRow = "-1";
+        slot.bumperEl.dataset.selected = "0";
         continue;
       }
 
       slot.rowEl.style.visibility = "visible";
+      slot.bumperEl.style.visibility = "visible";
       slot.baseIndex = baseIndex;
       slot.rowEl.dataset.baseIndex = String(baseIndex);
       slot.rowEl.dataset.viewRow = String(viewIndex);
+      slot.bumperEl.dataset.viewRow = String(viewIndex);
+      slot.bumperEl.dataset.selected = this._isRowFullySelected(viewIndex) ? "1" : "0";
 
       const row = this._mode === "chunked" ? this._chunkRows.get(baseIndex) : this._rows[baseIndex] || [];
       const isChunkLoading = this._mode === "chunked" && !row;
@@ -1416,22 +1455,101 @@ class VirtualGridTable {
 
   _rowsPointerStart(event) {
     if (event.button !== 0 && event.button !== -1) return;
-    const pointerType = event.pointerType || "mouse";
     const startCell = this._cellFromEvent(event);
-    const isTouchLike = this._isTouchDragEvent(event);
+    if (!startCell) {
+      this._clearSelection();
+      return;
+    }
+    event.preventDefault();
+    this._startSelectionDrag(event, startCell);
+  }
 
-    if (pointerType === "mouse") {
-      if (!startCell) {
-        this._clearSelection();
-        return;
-      }
-      event.preventDefault();
-      this._startSelectionDrag(event, startCell);
+  _rowBumperPointerStart(event) {
+    if (event.button !== 0 && event.button !== -1) return;
+    const startRow = this._rowFromBumperEvent(event);
+    if (startRow < 0) {
+      this._clearSelection();
       return;
     }
 
-    if (!isTouchLike) return;
-    this._startTouchGesture(event, startCell);
+    event.preventDefault();
+    this._activePointerGesture = null;
+    this._selectRowRange(startRow, startRow);
+    this._root.focus({ preventScroll: true });
+    this._rowBumpers.classList.add("vgt__rows--selecting");
+    const priorTouchAction = this._rowBumpers.style.touchAction;
+    this._rowBumpers.style.touchAction = "none";
+    try {
+      this._rowBumpers.setPointerCapture(event.pointerId);
+    } catch (err) {
+      void err;
+    }
+
+    const state = {
+      active: true,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      vScroll: 0,
+      rafId: 0,
+    };
+
+    const edgeThreshold = 30;
+    const maxEdgeScrollPerFrame = 22;
+
+    const updateFromPointer = (shouldScheduleRaf) => {
+      const rect = this._rowBumpers.getBoundingClientRect();
+      const topEdge = rect.top + edgeThreshold;
+      const bottomEdge = rect.bottom - edgeThreshold;
+      if (state.lastClientY < topEdge) {
+        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
+        state.vScroll = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientY > bottomEdge) {
+        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
+        state.vScroll = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScroll = 0;
+      }
+
+      const nextRow = this._rowFromBumperClientPointClamped(state.lastClientY);
+      if (nextRow >= 0) this._selectRowRange(startRow, nextRow);
+
+      if (shouldScheduleRaf && state.rafId === 0 && state.vScroll !== 0) {
+        state.rafId = window.requestAnimationFrame(onFrame);
+      }
+    };
+
+    const onFrame = () => {
+      state.rafId = 0;
+      if (!state.active) return;
+      if (state.vScroll !== 0) this._setScrollPx(this._scrollPx + state.vScroll);
+      updateFromPointer(true);
+    };
+
+    const onMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      state.lastClientX = moveEvent.clientX;
+      state.lastClientY = moveEvent.clientY;
+      updateFromPointer(true);
+    };
+
+    const onUp = () => {
+      state.active = false;
+      this._rowBumpers.classList.remove("vgt__rows--selecting");
+      this._rowBumpers.style.touchAction = priorTouchAction;
+      if (state.rafId) window.cancelAnimationFrame(state.rafId);
+      try {
+        this._rowBumpers.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        void err;
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
   }
 
   _isTouchDragEvent(event) {
@@ -1461,21 +1579,85 @@ class VirtualGridTable {
     this._setSelectionRange(startCell, startCell);
     this._root.focus({ preventScroll: true });
     this._rowsHost.classList.add("vgt__rows--selecting");
+    const priorTouchAction = this._rowsHost.style.touchAction;
+    this._rowsHost.style.touchAction = "none";
     try {
       this._rowsHost.setPointerCapture(event.pointerId);
     } catch (err) {
       void err;
     }
 
+    const state = {
+      active: true,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      vScrollX: 0,
+      vScrollY: 0,
+      rafId: 0,
+    };
+
+    const edgeThreshold = 30;
+    const maxEdgeScrollPerFrame = 22;
+
+    const updateFromPointer = (shouldScheduleRaf) => {
+      const rect = this._rowsHost.getBoundingClientRect();
+      const leftEdge = rect.left + edgeThreshold;
+      const rightEdge = rect.right - edgeThreshold;
+      const topEdge = rect.top + edgeThreshold;
+      const bottomEdge = rect.bottom - edgeThreshold;
+
+      if (state.lastClientX < leftEdge) {
+        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
+        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientX > rightEdge) {
+        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
+        state.vScrollX = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScrollX = 0;
+      }
+
+      if (state.lastClientY < topEdge) {
+        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
+        state.vScrollY = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientY > bottomEdge) {
+        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
+        state.vScrollY = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScrollY = 0;
+      }
+
+      const nextCell = this._cellFromClientPointClamped(state.lastClientX, state.lastClientY);
+      if (nextCell) this._setSelectionRange(startCell, nextCell);
+
+      if (
+        shouldScheduleRaf &&
+        state.rafId === 0 &&
+        (state.vScrollX !== 0 || state.vScrollY !== 0)
+      ) {
+        state.rafId = window.requestAnimationFrame(onFrame);
+      }
+    };
+
+    const onFrame = () => {
+      state.rafId = 0;
+      if (!state.active) return;
+      if (state.vScrollX !== 0) this._setScrollXPx(this._scrollXPx + state.vScrollX);
+      if (state.vScrollY !== 0) this._setScrollPx(this._scrollPx + state.vScrollY);
+      updateFromPointer(true);
+    };
+
     const onMove = (moveEvent) => {
-      const nextCell = this._cellFromClientPoint(moveEvent.clientX, moveEvent.clientY);
-      if (!nextCell) return;
       moveEvent.preventDefault();
-      this._setSelectionRange(startCell, nextCell);
+      state.lastClientX = moveEvent.clientX;
+      state.lastClientY = moveEvent.clientY;
+      updateFromPointer(true);
     };
 
     const onUp = () => {
+      state.active = false;
       this._rowsHost.classList.remove("vgt__rows--selecting");
+      this._rowsHost.style.touchAction = priorTouchAction;
+      if (state.rafId) window.cancelAnimationFrame(state.rafId);
       try {
         this._rowsHost.releasePointerCapture(event.pointerId);
       } catch (err) {
@@ -1483,10 +1665,12 @@ class VirtualGridTable {
       }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
 
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
   }
 
   _startTouchGesture(event, startCell) {
@@ -1586,6 +1770,38 @@ class VirtualGridTable {
     return this._cellFromElement(element);
   }
 
+  _cellFromClientPointClamped(clientX, clientY) {
+    const colCount = this._columns.length | 0;
+    const rowCount = this._viewCount | 0;
+    if (colCount <= 0 || rowCount <= 0) return null;
+    const rect = this._rowsHost.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    this._ensureColWidths();
+    const clampedX = this._clamp(clientX, rect.left + 1, rect.right - 1);
+    const clampedY = this._clamp(clientY, rect.top + 1, rect.bottom - 1);
+
+    const localX = clampedX - rect.left + this._scrollXPx;
+    const localY = clampedY - rect.top + this._scrollPx;
+    const maxY = Math.max(0, rowCount * this._opts.rowHeight - 1);
+    const row = this._clamp(Math.floor(localY / this._opts.rowHeight), 0, rowCount - 1);
+
+    const maxX = Math.max(0, this._totalContentWidth() - 1);
+    const x = this._clamp(localX, 0, maxX);
+    let col = colCount - 1;
+    let cursor = 0;
+    for (let i = 0; i < colCount; i += 1) {
+      const width = Math.max(this._minColWidth, this._colWidths[i] ?? this._minColWidth);
+      if (x < cursor + width) {
+        col = i;
+        break;
+      }
+      cursor += width;
+    }
+
+    return { row: Math.min(row, Math.floor(maxY / this._opts.rowHeight)), col };
+  }
+
   _cellFromElement(element) {
     const cellEl = element.closest(".vgt__cell");
     if (!cellEl || !this._rowsHost.contains(cellEl)) return null;
@@ -1595,6 +1811,67 @@ class VirtualGridTable {
     const colIndex = Number(cellEl.dataset.colIndex);
     if (!Number.isFinite(viewRow) || viewRow < 0 || !Number.isFinite(colIndex) || colIndex < 0) return null;
     return { row: viewRow, col: colIndex };
+  }
+
+  _rowFromBumperEvent(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return -1;
+    return this._rowFromBumperElement(target);
+  }
+
+  _rowFromBumperClientPoint(clientX, clientY) {
+    const element = document.elementFromPoint(clientX, clientY);
+    if (!(element instanceof Element)) return -1;
+    return this._rowFromBumperElement(element);
+  }
+
+  _rowFromBumperClientPointClamped(clientY) {
+    const rowCount = this._viewCount | 0;
+    if (rowCount <= 0) return -1;
+    const rect = this._rowBumpers.getBoundingClientRect();
+    if (rect.height <= 0) return -1;
+    const clampedY = this._clamp(clientY, rect.top + 1, rect.bottom - 1);
+    const localY = clampedY - rect.top + this._scrollPx;
+    return this._clamp(Math.floor(localY / this._opts.rowHeight), 0, rowCount - 1);
+  }
+
+  _rowFromBumperElement(element) {
+    const bumperEl = element.closest(".vgt__rowBumper");
+    if (!bumperEl || !this._rowBumpers.contains(bumperEl)) return -1;
+    const viewRow = Number(bumperEl.dataset.viewRow);
+    if (!Number.isFinite(viewRow) || viewRow < 0) return -1;
+    return viewRow;
+  }
+
+  _selectAllCells() {
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (rowCount <= 0 || colCount <= 0) return;
+    this._selectionRange = {
+      rowMin: 0,
+      rowMax: rowCount - 1,
+      colMin: 0,
+      colMax: colCount - 1,
+    };
+    this._root.focus({ preventScroll: true });
+    this._syncHeadBumperState();
+    this._renderBody();
+  }
+
+  _selectRowRange(rowA, rowB) {
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (rowCount <= 0 || colCount <= 0) return;
+    const minRow = this._clamp(Math.min(rowA | 0, rowB | 0), 0, rowCount - 1);
+    const maxRow = this._clamp(Math.max(rowA | 0, rowB | 0), 0, rowCount - 1);
+    this._selectionRange = {
+      rowMin: minRow,
+      rowMax: maxRow,
+      colMin: 0,
+      colMax: colCount - 1,
+    };
+    this._syncHeadBumperState();
+    this._renderBody();
   }
 
   _setSelectionRange(anchorCell, focusCell) {
@@ -1608,12 +1885,14 @@ class VirtualGridTable {
       colMin: Math.min(colA, colB),
       colMax: Math.max(colA, colB),
     };
+    this._syncHeadBumperState();
     this._renderBody();
   }
 
   _clearSelection(rerender = true) {
     if (!this._selectionRange) return;
     this._selectionRange = null;
+    this._syncHeadBumperState();
     if (rerender) this._renderBody();
   }
 
@@ -1630,6 +1909,31 @@ class VirtualGridTable {
       colIndex >= range.colMin &&
       colIndex <= range.colMax
     );
+  }
+
+  _isRowFullySelected(viewRow) {
+    const range = this._selectionRange;
+    const lastCol = this._columns.length - 1;
+    if (!range || lastCol < 0) return false;
+    return viewRow >= range.rowMin && viewRow <= range.rowMax && range.colMin === 0 && range.colMax === lastCol;
+  }
+
+  _isAllSelected() {
+    const range = this._selectionRange;
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (!range || rowCount <= 0 || colCount <= 0) return false;
+    return (
+      range.rowMin === 0 &&
+      range.rowMax === rowCount - 1 &&
+      range.colMin === 0 &&
+      range.colMax === colCount - 1
+    );
+  }
+
+  _syncHeadBumperState() {
+    if (!this._headBumper) return;
+    this._headBumper.dataset.active = this._isAllSelected() ? "1" : "0";
   }
 
   _isEditableTarget(target) {
@@ -1883,7 +2187,7 @@ const grid = new VirtualGridTable("grid", {
   visibleCols: 6,
   overscan: 2,
   demo_mode: true,
-  demo_rows: 5000000,
+  demo_rows: 50000,
 });
 
 if (grid._opts.demo_mode === "chunked") {
