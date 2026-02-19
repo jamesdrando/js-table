@@ -466,6 +466,37 @@ body {
   display: flex;
 }
 
+.vgt__copyFab {
+  position: absolute;
+  right: calc(var(--vgt-scroll-w) + 10px);
+  bottom: calc(var(--vgt-hscroll-h) + 10px);
+  z-index: 6;
+  border: 1px solid #6ea8e8;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2d6fb4, #245e9c);
+  color: #f3f8ff;
+  font: 12px/1.1 "Segoe UI", "Aptos", "Calibri", system-ui, sans-serif;
+  font-weight: 600;
+  padding: 8px 14px;
+  box-shadow: 0 10px 24px rgba(3, 13, 29, 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  display: none;
+}
+
+.vgt__copyFab[data-show="1"] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.vgt__copyFab[data-copied="1"] {
+  background: linear-gradient(180deg, #2b8f74, #23735d);
+  border-color: #6ad4b6;
+}
+
 .vgt__filterMenu {
   position: absolute;
   top: 0;
@@ -689,5 +720,23 @@ body {
 
   .vgt__rows.vgt__rows--selecting {
     cursor: cell;
+  }
+
+  .vgt__copyFab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    min-height: 36px;
+    touch-action: manipulation;
+  }
+
+  .vgt__copyFab[data-copied="1"]::after {
+    content: "Copied";
+    color: #f3fff8;
+  }
+
+  .vgt__copyFab[data-copied="1"] {
+    color: transparent;
   }
 }
