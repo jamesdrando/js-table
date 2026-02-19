@@ -276,6 +276,7 @@ class VirtualGridTable {
     this._ro?.disconnect();
     this._cancelActivePointerGesture();
     this._closeFilterMenu();
+    this._closeContextMenu();
     if (this._mobileCopyResetTimer) {
       window.clearTimeout(this._mobileCopyResetTimer);
       this._mobileCopyResetTimer = 0;
@@ -393,8 +394,18 @@ class VirtualGridTable {
     const scroll = document.createElement("div");
     scroll.className = "vgt__scroll";
 
-    const sUp = this._createButton("vgt__sbtn", "\u2191", () => this._scrollBy(-this._bodyH * 0.9), "Scroll up");
-    const sDown = this._createButton("vgt__sbtn", "\u2193", () => this._scrollBy(this._bodyH * 0.9), "Scroll down");
+    const sUp = this._createButton(
+      "vgt__sbtn vgt__triBtn vgt__triBtn--up",
+      "",
+      () => this._scrollBy(-this._bodyH * 0.9),
+      "Scroll up"
+    );
+    const sDown = this._createButton(
+      "vgt__sbtn vgt__triBtn vgt__triBtn--down",
+      "",
+      () => this._scrollBy(this._bodyH * 0.9),
+      "Scroll down"
+    );
     this._sUp = sUp;
     this._sDown = sDown;
 
@@ -430,21 +441,39 @@ class VirtualGridTable {
     overlay.textContent = "No data to display";
     this._overlay = overlay;
 
+    const copyFabGroup = document.createElement("div");
+    copyFabGroup.className = "vgt__copyFabGroup";
+    copyFabGroup.dataset.show = "0";
+
     const copyFab = document.createElement("button");
     copyFab.className = "vgt__copyFab";
     copyFab.type = "button";
-    copyFab.dataset.show = "0";
     copyFab.dataset.copied = "0";
     copyFab.textContent = "Copy";
     copyFab.setAttribute("aria-label", "Copy selected cells");
     copyFab.addEventListener("click", (event) => {
       event.preventDefault();
-      this._copySelectionToClipboard();
-      this._flashMobileCopyButton();
+      this._copySelectionToClipboard(false);
+      this._flashMobileCopyButton(copyFab);
     });
     this._copyFab = copyFab;
 
-    mid.append(rowBumpers, rowsHost, scroll, hscroll, corner, overlay, copyFab);
+    const copyFabWithHeaders = document.createElement("button");
+    copyFabWithHeaders.className = "vgt__copyFab vgt__copyFab--headers";
+    copyFabWithHeaders.type = "button";
+    copyFabWithHeaders.dataset.copied = "0";
+    copyFabWithHeaders.textContent = "Copy with headers";
+    copyFabWithHeaders.setAttribute("aria-label", "Copy selected cells with headers");
+    copyFabWithHeaders.addEventListener("click", (event) => {
+      event.preventDefault();
+      this._copySelectionToClipboard(true);
+      this._flashMobileCopyButton(copyFabWithHeaders);
+    });
+    this._copyFabWithHeaders = copyFabWithHeaders;
+    copyFabGroup.append(copyFab, copyFabWithHeaders);
+    this._copyFabGroup = copyFabGroup;
+
+    mid.append(rowBumpers, rowsHost, scroll, hscroll, corner, overlay, copyFabGroup);
 
     const footer = document.createElement("div");
     footer.className = "vgt__footer";
@@ -482,10 +511,30 @@ class VirtualGridTable {
     const pager = document.createElement("div");
     pager.className = "vgt__pager";
 
-    const pUp = this._createButton("vgt__pill vgt__navBtn", "\u2191", () => this._scrollBy(-this._bodyH), "Page up");
-    const pDown = this._createButton("vgt__pill vgt__navBtn", "\u2193", () => this._scrollBy(this._bodyH), "Page down");
-    const pLeft = this._createButton("vgt__pill vgt__navBtn", "\u2190", () => this._scrollXBy(-this._bodyW * 0.9), "Scroll left");
-    const pRight = this._createButton("vgt__pill vgt__navBtn", "\u2192", () => this._scrollXBy(this._bodyW * 0.9), "Scroll right");
+    const pUp = this._createButton(
+      "vgt__pill vgt__navBtn vgt__triBtn vgt__triBtn--up",
+      "",
+      () => this._scrollBy(-this._bodyH),
+      "Page up"
+    );
+    const pDown = this._createButton(
+      "vgt__pill vgt__navBtn vgt__triBtn vgt__triBtn--down",
+      "",
+      () => this._scrollBy(this._bodyH),
+      "Page down"
+    );
+    const pLeft = this._createButton(
+      "vgt__pill vgt__navBtn vgt__triBtn vgt__triBtn--left",
+      "",
+      () => this._scrollXBy(-this._bodyW * 0.9),
+      "Scroll left"
+    );
+    const pRight = this._createButton(
+      "vgt__pill vgt__navBtn vgt__triBtn vgt__triBtn--right",
+      "",
+      () => this._scrollXBy(this._bodyW * 0.9),
+      "Scroll right"
+    );
     this._pLeft = pLeft;
     this._pRight = pRight;
     this._pUp = pUp;
@@ -580,10 +629,37 @@ class VirtualGridTable {
     filterActions.append(applyFilterBtn, clearFilterBtn);
     filterMenu.append(filterActions);
 
+    const contextMenu = document.createElement("div");
+    contextMenu.className = "vgt__ctxMenu";
+    contextMenu.dataset.open = "0";
+
+    const copyMenuBtn = document.createElement("button");
+    copyMenuBtn.className = "vgt__ctxMenuItem";
+    copyMenuBtn.type = "button";
+    copyMenuBtn.textContent = "Copy";
+    copyMenuBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      this._copySelectionToClipboard(false);
+      this._closeContextMenu();
+    });
+
+    const copyMenuHeadersBtn = document.createElement("button");
+    copyMenuHeadersBtn.className = "vgt__ctxMenuItem";
+    copyMenuHeadersBtn.type = "button";
+    copyMenuHeadersBtn.textContent = "Copy with headers";
+    copyMenuHeadersBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      this._copySelectionToClipboard(true);
+      this._closeContextMenu();
+    });
+
+    contextMenu.append(copyMenuBtn, copyMenuHeadersBtn);
+    this._contextMenu = contextMenu;
+
     toolbar.append(searchWrap);
     top.append(toolbar, head);
     footer.append(footerSpacer, pager, status);
-    root.append(top, mid, footer, filterMenu);
+    root.append(top, mid, footer, filterMenu, contextMenu);
 
     this._host.innerHTML = "";
     this._host.append(root);
@@ -653,6 +729,10 @@ class VirtualGridTable {
           event.preventDefault();
           this._closeFilterMenu();
         }
+        if (this._contextMenu?.dataset.open === "1") {
+          event.preventDefault();
+          this._closeContextMenu();
+        }
       }
     });
 
@@ -678,9 +758,13 @@ class VirtualGridTable {
     this._rowsHost.addEventListener("pointerdown", (event) => this._rowsPointerStart(event));
     this._rowBumpers.addEventListener("pointerdown", (event) => this._rowBumperPointerStart(event));
     this._root.addEventListener("copy", (event) => this._onCopy(event));
+    this._root.addEventListener("contextmenu", (event) => this._onContextMenu(event));
     this._boundWindowPointerDown = (event) => this._windowPointerDown(event);
     window.addEventListener("pointerdown", this._boundWindowPointerDown, true);
-    this._boundWindowResize = () => this._closeFilterMenu();
+    this._boundWindowResize = () => {
+      this._closeFilterMenu();
+      this._closeContextMenu();
+    };
     window.addEventListener("resize", this._boundWindowResize, { passive: true });
 
     this._ro = new ResizeObserver(() => {
@@ -1137,15 +1221,13 @@ class VirtualGridTable {
 
       if (this._sort && this._sort.colIndex === abs) {
         const sortEl = document.createElement("span");
-        sortEl.className = "vgt__sort";
-        sortEl.textContent = this._sort.dir === 1 ? "\u2191" : "\u2193";
+        sortEl.className = this._sort.dir === 1 ? "vgt__sort vgt__sort--asc" : "vgt__sort vgt__sort--desc";
         controls.append(sortEl);
       }
 
       const filterBtn = document.createElement("button");
-      filterBtn.className = "vgt__filterBtn";
+      filterBtn.className = "vgt__filterBtn vgt__triBtn vgt__triBtn--down";
       filterBtn.type = "button";
-      filterBtn.textContent = "\u25BE";
       filterBtn.title = "Column filter and sort";
       filterBtn.dataset.active = this._columnFilters.has(abs) ? "1" : "0";
       filterBtn.addEventListener("click", (event) => {
@@ -1270,9 +1352,55 @@ class VirtualGridTable {
       safeState === "asc" ? "Sort: ascending" : safeState === "desc" ? "Sort: descending" : "Sort: none";
   }
 
+  _onContextMenu(event) {
+    if (this._isCoarsePointer()) return;
+    if (!this._hasSelection()) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!this._isContextMenuSelectionTarget(target)) return;
+    event.preventDefault();
+    this._openContextMenu(event.clientX, event.clientY);
+  }
+
+  _isContextMenuSelectionTarget(target) {
+    return Boolean(
+      target.closest(".vgt__cell") ||
+      target.closest(".vgt__rowBumper") ||
+      target.closest(".vgt__hcell") ||
+      target.closest(".vgt__headBumper")
+    );
+  }
+
+  _openContextMenu(clientX, clientY) {
+    if (!this._contextMenu) return;
+    const rootRect = this._root.getBoundingClientRect();
+    const menu = this._contextMenu;
+    menu.dataset.open = "1";
+    menu.style.visibility = "hidden";
+    menu.style.left = "0px";
+    menu.style.top = "0px";
+    const menuRect = menu.getBoundingClientRect();
+    const x = this._clamp(clientX - rootRect.left, 6, Math.max(6, rootRect.width - menuRect.width - 6));
+    const y = this._clamp(clientY - rootRect.top, 6, Math.max(6, rootRect.height - menuRect.height - 6));
+    menu.style.left = `${Math.floor(x)}px`;
+    menu.style.top = `${Math.floor(y)}px`;
+    menu.style.visibility = "";
+  }
+
+  _closeContextMenu() {
+    if (!this._contextMenu) return;
+    this._contextMenu.dataset.open = "0";
+    this._contextMenu.style.left = "";
+    this._contextMenu.style.top = "";
+    this._contextMenu.style.visibility = "";
+  }
+
   _windowPointerDown(event) {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (this._contextMenu?.dataset.open === "1") {
+      if (!target.closest(".vgt__ctxMenu")) this._closeContextMenu();
+    }
     if (this._filterMenuCol >= 0) {
       if (!target.closest(".vgt__filterMenu") && !target.closest(".vgt__filterBtn")) {
         this._closeFilterMenu();
@@ -1282,7 +1410,8 @@ class VirtualGridTable {
       this._hasSelection() &&
       !target.closest(".vgt__cell") &&
       !target.closest(".vgt__rowBumper") &&
-      !target.closest(".vgt__copyFab")
+      !target.closest(".vgt__copyFabGroup") &&
+      !target.closest(".vgt__ctxMenu")
     ) {
       this._clearSelection();
     }
@@ -2271,6 +2400,7 @@ class VirtualGridTable {
   _clearSelection(rerender = true) {
     if (!this._selectionRange) return;
     this._selectionRange = null;
+    this._closeContextMenu();
     this._syncHeadBumperState();
     if (rerender) {
       this._renderBody();
@@ -2339,7 +2469,7 @@ class VirtualGridTable {
   }
 
   _syncMobileCopyButton() {
-    if (!this._copyFab) return;
+    if (!this._copyFabGroup) return;
     const hasSelection = this._hasSelection();
     const isGestureActive =
       this._pointerSelecting ||
@@ -2347,20 +2477,24 @@ class VirtualGridTable {
       this._rowsHost.classList.contains("vgt__rows--selecting") ||
       this._rowBumpers.classList.contains("vgt__rows--selecting");
     const shouldShow = this._isCoarsePointer() && hasSelection && !isGestureActive;
-    this._copyFab.dataset.show = shouldShow ? "1" : "0";
+    this._copyFabGroup.dataset.show = shouldShow ? "1" : "0";
     if (!shouldShow) this._copyFab.dataset.copied = "0";
+    if (!shouldShow && this._copyFabWithHeaders) this._copyFabWithHeaders.dataset.copied = "0";
   }
 
-  _flashMobileCopyButton() {
-    if (!this._copyFab || this._copyFab.dataset.show !== "1") return;
+  _flashMobileCopyButton(button) {
+    const targetBtn = button || this._copyFab;
+    if (!targetBtn || this._copyFabGroup?.dataset.show !== "1") return;
     if (this._mobileCopyResetTimer) {
       window.clearTimeout(this._mobileCopyResetTimer);
       this._mobileCopyResetTimer = 0;
     }
-    this._copyFab.dataset.copied = "1";
+    if (this._copyFab) this._copyFab.dataset.copied = "0";
+    if (this._copyFabWithHeaders) this._copyFabWithHeaders.dataset.copied = "0";
+    targetBtn.dataset.copied = "1";
     this._mobileCopyResetTimer = window.setTimeout(() => {
       this._mobileCopyResetTimer = 0;
-      if (this._copyFab) this._copyFab.dataset.copied = "0";
+      if (targetBtn) targetBtn.dataset.copied = "0";
     }, 950);
   }
 
@@ -2377,14 +2511,14 @@ class VirtualGridTable {
 
   _onCopy(event) {
     if (!this._hasSelection()) return;
-    const payload = this._clipboardPayload();
+    const payload = this._clipboardPayload(this._isAllSelected());
     if (!payload.text) return;
     event.preventDefault();
     this._writeClipboardData(event.clipboardData, payload);
   }
 
-  _copySelectionToClipboard() {
-    const payload = this._clipboardPayload();
+  _copySelectionToClipboard(includeHeaders = this._isAllSelected()) {
+    const payload = this._clipboardPayload(includeHeaders);
     if (!payload.text) return;
     if (
       navigator.clipboard &&
@@ -2438,20 +2572,20 @@ class VirtualGridTable {
     if (payload.html) clipboardData.setData("text/html", payload.html);
   }
 
-  _clipboardPayload() {
-    const rows = this._selectionRowsForClipboard();
+  _clipboardPayload(includeHeaders = false) {
+    const rows = this._selectionRowsForClipboard(includeHeaders);
     if (rows.length === 0) return { text: "", html: "" };
     return {
       text: rows.map((row) => row.join("\t")).join("\n"),
-      html: this._selectionRowsToHtml(rows, this._isAllSelected()),
+      html: this._selectionRowsToHtml(rows, includeHeaders),
     };
   }
 
-  _selectionRowsForClipboard() {
+  _selectionRowsForClipboard(includeHeaders = false) {
     if (!this._selectionRange) return [];
     const { rowMin, rowMax, colMin, colMax } = this._selectionRange;
     const out = [];
-    if (this._isAllSelected()) {
+    if (includeHeaders) {
       const headerOut = [];
       for (let col = colMin; col <= colMax; col += 1) {
         const column = this._columns[col];
@@ -2477,12 +2611,22 @@ class VirtualGridTable {
 
   _selectionRowsToHtml(rows, hasHeaderRow) {
     if (!rows.length) return "";
+    const colCount = rows[0]?.length || 0;
+    const colWidths = this._estimateClipboardColumnWidths(rows, colCount);
     const tableStyle =
-      "border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;line-height:1.4;color:#0f172a;background:#ffffff;";
+      "border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;line-height:1.4;color:#0f172a;background:#ffffff;table-layout:auto;";
     const thStyle =
       "border:1px solid #d0d7de;padding:6px 10px;background:#f6f8fa;font-weight:600;text-align:left;white-space:nowrap;";
-    const tdStyle = "border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top;";
+    const tdStyle =
+      "border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top;white-space:nowrap;";
     let html = `<table style="${tableStyle}">`;
+    if (colWidths.length > 0) {
+      html += "<colgroup>";
+      for (let c = 0; c < colWidths.length; c += 1) {
+        html += `<col style="width:${colWidths[c]}px;">`;
+      }
+      html += "</colgroup>";
+    }
     for (let r = 0; r < rows.length; r += 1) {
       const row = rows[r];
       html += "<tr>";
@@ -2497,6 +2641,23 @@ class VirtualGridTable {
     return html;
   }
 
+  _estimateClipboardColumnWidths(rows, colCount) {
+    if (!rows.length || colCount <= 0) return [];
+    const out = new Array(colCount).fill(0);
+    for (let c = 0; c < colCount; c += 1) {
+      let maxLen = 0;
+      for (let r = 0; r < rows.length; r += 1) {
+        const value = rows[r][c];
+        const text = String(value == null ? "" : value);
+        const compact = text.replace(/\s+/g, " ").trim();
+        const measured = compact.length || text.length;
+        if (measured > maxLen) maxLen = measured;
+      }
+      out[c] = this._clamp(Math.round(maxLen * 7.4 + 34), 84, 460);
+    }
+    return out;
+  }
+
   _escapeHtml(value) {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -2507,7 +2668,7 @@ class VirtualGridTable {
   }
 
   _selectionToTsv() {
-    const rows = this._selectionRowsForClipboard();
+    const rows = this._selectionRowsForClipboard(this._isAllSelected());
     if (rows.length === 0) return "";
     return rows.map((row) => row.join("\t")).join("\n");
   }
@@ -2699,7 +2860,7 @@ const grid = new VirtualGridTable("grid", {
   visibleCols: 6,
   overscan: 2,
   demo_mode: true,
-  demo_rows: 100,
+  demo_rows: 500,
 });
 
 if (grid._opts.demo_mode === "chunked") {
