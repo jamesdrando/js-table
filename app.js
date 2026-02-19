@@ -492,6 +492,11 @@ class VirtualGridTable {
     filterMenu.append(filterOp);
     this._filterOp = filterOp;
 
+    const filterLabel = document.createElement("div");
+    filterLabel.className = "vgt__filterSection";
+    filterLabel.textContent = "Filter";
+    filterMenu.append(filterLabel);
+
     const filterValueA = document.createElement("input");
     filterValueA.className = "vgt__filterInput";
     filterValueA.type = "text";
@@ -518,11 +523,32 @@ class VirtualGridTable {
     filterMenu.append(filterValueB);
     this._filterValueB = filterValueB;
 
+    const divider = document.createElement("div");
+    divider.className = "vgt__filterDivider";
+    filterMenu.append(divider);
+
+    const sortLabel = document.createElement("div");
+    sortLabel.className = "vgt__filterSection";
+    sortLabel.textContent = "Sort";
+    filterMenu.append(sortLabel);
+
+    const filterSortBtn = this._createButton("vgt__pill vgt__filterSortBtn", "", () => {
+      const current = this._filterSortBtn?.dataset.state || "none";
+      this._setFilterSortState(this._nextSortState(current));
+    });
+    filterSortBtn.dataset.state = "none";
+    this._filterSortBtn = filterSortBtn;
+    this._setFilterSortState("none");
+    filterMenu.append(filterSortBtn);
+
     const filterActions = document.createElement("div");
     filterActions.className = "vgt__filterActions";
     const applyFilterBtn = this._createButton("vgt__pill vgt__filterApply", "Apply", () => this._applyFilterMenu());
     const clearFilterBtn = this._createButton("vgt__pill vgt__filterClear", "Clear", () => {
-      if (this._filterMenuCol >= 0) this.setColumnFilter(this._filterMenuCol, null);
+      if (this._filterMenuCol < 0) return;
+      const absCol = this._filterMenuCol | 0;
+      this.setColumnFilter(absCol, null);
+      if (this._sort && this._sort.colIndex === absCol) this.clearSort();
     });
     filterActions.append(applyFilterBtn, clearFilterBtn);
     filterMenu.append(filterActions);
@@ -960,11 +986,10 @@ class VirtualGridTable {
         const hc = document.createElement("div");
         hc.className = "vgt__hcell";
         hc.dataset.slot = String(slot);
-        hc.addEventListener("click", (event) => {
+        hc.addEventListener("pointerdown", (event) => {
           if (event.target instanceof Element && event.target.closest(".vgt__resizeHandle")) return;
           if (event.target instanceof Element && event.target.closest(".vgt__filterBtn")) return;
-          const abs = parseInt(hc.dataset.abs || "-1", 10) | 0;
-          if (abs >= 0) this._toggleSort(abs);
+          this._headerPointerStart(event, hc);
         });
 
         this._headInner.append(hc);
@@ -982,6 +1007,7 @@ class VirtualGridTable {
       const headerCell = this._hcells[slot];
       headerCell.dataset.abs = String(abs);
       headerCell.innerHTML = "";
+      headerCell.classList.toggle("vgt__hcell--selected", this._isColumnFullySelected(abs));
 
       if (!col) {
         headerCell.style.pointerEvents = "none";
@@ -1012,7 +1038,7 @@ class VirtualGridTable {
       filterBtn.className = "vgt__filterBtn";
       filterBtn.type = "button";
       filterBtn.textContent = "\u25BE";
-      filterBtn.title = "Column filter";
+      filterBtn.title = "Column filter and sort";
       filterBtn.dataset.active = this._columnFilters.has(abs) ? "1" : "0";
       filterBtn.addEventListener("click", (event) => {
         event.preventDefault();
@@ -1061,7 +1087,7 @@ class VirtualGridTable {
 
   _openFilterMenu(absCol, anchorEl) {
     const col = this._columns[absCol];
-    if (!col || !this._filterMenu || !this._filterOp || !this._filterValueA || !this._filterValueB) return;
+    if (!col || !this._filterMenu || !this._filterOp || !this._filterValueA || !this._filterValueB || !this._filterSortBtn) return;
 
     this._filterMenuCol = absCol;
     const existing = this._columnFilters.get(absCol);
@@ -1069,6 +1095,7 @@ class VirtualGridTable {
     this._filterOp.value = existing?.op ?? "like";
     this._filterValueA.value = existing?.value ?? "";
     this._filterValueB.value = existing?.valueTo ?? "";
+    this._setFilterSortState(this._sort && this._sort.colIndex === absCol ? (this._sort.dir === 1 ? "asc" : "desc") : "none");
     this._syncFilterMenuInputs();
 
     this._filterMenu.dataset.open = "1";
@@ -1106,12 +1133,33 @@ class VirtualGridTable {
   }
 
   _applyFilterMenu() {
-    if (this._filterMenuCol < 0 || !this._filterOp || !this._filterValueA || !this._filterValueB) return;
-    this.setColumnFilter(this._filterMenuCol, {
+    if (this._filterMenuCol < 0 || !this._filterOp || !this._filterValueA || !this._filterValueB || !this._filterSortBtn) return;
+    const absCol = this._filterMenuCol | 0;
+    const sortDir = this._filterSortBtn.dataset.state || "none";
+    this.setColumnFilter(absCol, {
       op: this._filterOp.value,
       value: this._filterValueA.value,
       valueTo: this._filterOp.value === "between" ? this._filterValueB.value : "",
     });
+    if (sortDir === "asc" || sortDir === "desc") {
+      this.sortBy(absCol, sortDir);
+    } else if (this._sort && this._sort.colIndex === absCol) {
+      this.clearSort();
+    }
+  }
+
+  _nextSortState(state) {
+    if (state === "none") return "asc";
+    if (state === "asc") return "desc";
+    return "none";
+  }
+
+  _setFilterSortState(state) {
+    if (!this._filterSortBtn) return;
+    const safeState = state === "asc" || state === "desc" ? state : "none";
+    this._filterSortBtn.dataset.state = safeState;
+    this._filterSortBtn.textContent =
+      safeState === "asc" ? "Sort: ascending" : safeState === "desc" ? "Sort: descending" : "Sort: none";
   }
 
   _windowPointerDown(event) {
@@ -1290,18 +1338,6 @@ class VirtualGridTable {
     this._pRight.disabled = !canHScroll;
   }
 
-  _toggleSort(absColIndex) {
-    if (!this._sort || this._sort.colIndex !== absColIndex) {
-      this._sort = { colIndex: absColIndex, dir: 1 };
-    } else if (this._sort.dir === 1) {
-      this._sort = { colIndex: absColIndex, dir: -1 };
-    } else {
-      this._sort = null;
-    }
-
-    this._onQueryStateChanged("sort");
-  }
-
   _scrollBy(deltaPx) {
     this._setScrollPx(this._scrollPx + deltaPx);
   }
@@ -1462,6 +1498,87 @@ class VirtualGridTable {
     }
     event.preventDefault();
     this._startSelectionDrag(event, startCell);
+  }
+
+  _headerPointerStart(event, headerCell) {
+    if (event.button !== 0 && event.button !== -1) return;
+    const startCol = parseInt(headerCell?.dataset.abs || "-1", 10) | 0;
+    if (startCol < 0 || startCol >= this._columns.length) {
+      this._clearSelection();
+      return;
+    }
+
+    event.preventDefault();
+    this._activePointerGesture = null;
+    this._selectColumnRange(startCol, startCol);
+    this._root.focus({ preventScroll: true });
+
+    const state = {
+      active: true,
+      lastClientX: event.clientX,
+      vScrollX: 0,
+      rafId: 0,
+    };
+
+    const edgeThreshold = 30;
+    const maxEdgeScrollPerFrame = 22;
+
+    const updateFromPointer = (shouldScheduleRaf) => {
+      const rect = this._rowsHost.getBoundingClientRect();
+      const leftEdge = rect.left + edgeThreshold;
+      const rightEdge = rect.right - edgeThreshold;
+      if (state.lastClientX < leftEdge) {
+        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
+        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
+      } else if (state.lastClientX > rightEdge) {
+        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
+        state.vScrollX = ratio * maxEdgeScrollPerFrame;
+      } else {
+        state.vScrollX = 0;
+      }
+
+      const nextCol = this._colFromHeaderClientPointClamped(state.lastClientX);
+      if (nextCol >= 0) this._selectColumnRange(startCol, nextCol);
+
+      if (shouldScheduleRaf && state.rafId === 0 && state.vScrollX !== 0) {
+        state.rafId = window.requestAnimationFrame(onFrame);
+      }
+    };
+
+    const onFrame = () => {
+      state.rafId = 0;
+      if (!state.active) return;
+      if (state.vScrollX !== 0) this._setScrollXPx(this._scrollXPx + state.vScrollX);
+      updateFromPointer(true);
+    };
+
+    const onMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      state.lastClientX = moveEvent.clientX;
+      updateFromPointer(true);
+    };
+
+    const onUp = () => {
+      state.active = false;
+      if (state.rafId) window.cancelAnimationFrame(state.rafId);
+      try {
+        this._head.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        void err;
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    try {
+      this._head.setPointerCapture(event.pointerId);
+    } catch (err) {
+      void err;
+    }
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
   }
 
   _rowBumperPointerStart(event) {
@@ -1802,6 +1919,24 @@ class VirtualGridTable {
     return { row: Math.min(row, Math.floor(maxY / this._opts.rowHeight)), col };
   }
 
+  _colFromHeaderClientPointClamped(clientX) {
+    const colCount = this._columns.length | 0;
+    if (colCount <= 0) return -1;
+    const rect = this._rowsHost.getBoundingClientRect();
+    if (rect.width <= 0) return -1;
+    const clampedX = this._clamp(clientX, rect.left + 1, rect.right - 1);
+    const localX = clampedX - rect.left + this._scrollXPx;
+    const maxX = Math.max(0, this._totalContentWidth() - 1);
+    const x = this._clamp(localX, 0, maxX);
+    let cursor = 0;
+    for (let i = 0; i < colCount; i += 1) {
+      const width = Math.max(this._minColWidth, this._colWidths[i] ?? this._minColWidth);
+      if (x < cursor + width) return i;
+      cursor += width;
+    }
+    return colCount - 1;
+  }
+
   _cellFromElement(element) {
     const cellEl = element.closest(".vgt__cell");
     if (!cellEl || !this._rowsHost.contains(cellEl)) return null;
@@ -1856,6 +1991,7 @@ class VirtualGridTable {
     this._root.focus({ preventScroll: true });
     this._syncHeadBumperState();
     this._renderBody();
+    this._renderHeaderSelectionState();
   }
 
   _selectRowRange(rowA, rowB) {
@@ -1872,6 +2008,24 @@ class VirtualGridTable {
     };
     this._syncHeadBumperState();
     this._renderBody();
+    this._renderHeaderSelectionState();
+  }
+
+  _selectColumnRange(colA, colB) {
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (rowCount <= 0 || colCount <= 0) return;
+    const minCol = this._clamp(Math.min(colA | 0, colB | 0), 0, colCount - 1);
+    const maxCol = this._clamp(Math.max(colA | 0, colB | 0), 0, colCount - 1);
+    this._selectionRange = {
+      rowMin: 0,
+      rowMax: rowCount - 1,
+      colMin: minCol,
+      colMax: maxCol,
+    };
+    this._syncHeadBumperState();
+    this._renderBody();
+    this._renderHeaderSelectionState();
   }
 
   _setSelectionRange(anchorCell, focusCell) {
@@ -1887,13 +2041,17 @@ class VirtualGridTable {
     };
     this._syncHeadBumperState();
     this._renderBody();
+    this._renderHeaderSelectionState();
   }
 
   _clearSelection(rerender = true) {
     if (!this._selectionRange) return;
     this._selectionRange = null;
     this._syncHeadBumperState();
-    if (rerender) this._renderBody();
+    if (rerender) {
+      this._renderBody();
+      this._renderHeaderSelectionState();
+    }
   }
 
   _hasSelection() {
@@ -1918,6 +2076,13 @@ class VirtualGridTable {
     return viewRow >= range.rowMin && viewRow <= range.rowMax && range.colMin === 0 && range.colMax === lastCol;
   }
 
+  _isColumnFullySelected(colIndex) {
+    const range = this._selectionRange;
+    const lastRow = this._viewCount - 1;
+    if (!range || lastRow < 0) return false;
+    return colIndex >= range.colMin && colIndex <= range.colMax && range.rowMin === 0 && range.rowMax === lastRow;
+  }
+
   _isAllSelected() {
     const range = this._selectionRange;
     const rowCount = this._viewCount | 0;
@@ -1934,6 +2099,14 @@ class VirtualGridTable {
   _syncHeadBumperState() {
     if (!this._headBumper) return;
     this._headBumper.dataset.active = this._isAllSelected() ? "1" : "0";
+  }
+
+  _renderHeaderSelectionState() {
+    if (!this._hcells) return;
+    for (let i = 0; i < this._hcells.length; i += 1) {
+      const abs = parseInt(this._hcells[i].dataset.abs || "-1", 10) | 0;
+      this._hcells[i].classList.toggle("vgt__hcell--selected", abs >= 0 && this._isColumnFullySelected(abs));
+    }
   }
 
   _isEditableTarget(target) {
