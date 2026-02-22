@@ -2860,7 +2860,7 @@ const grid = new VirtualGridTable("grid", {
   visibleCols: 6,
   overscan: 2,
   demo_mode: true,
-  demo_rows: 500,
+  demo_rows: 50000,
 });
 
 if (grid._opts.demo_mode === "chunked") {
