@@ -1,0 +1,103 @@
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --theme-font-sans: "Segoe UI", "Aptos", "Calibri", system-ui, sans-serif;
+
+  --theme-bg-canvas: #0b1220;
+  --theme-surface-1: #111827;
+  --theme-surface-2: #182233;
+  --theme-surface-3: #141d2b;
+  --theme-border: #2f3a4d;
+  --theme-text: #e5e7eb;
+  --theme-text-muted: #9aa9bf;
+  --theme-accent: #4f9cff;
+  --theme-accent-strong: #2d6fb4;
+  --theme-accent-contrast: #f3f8ff;
+  --theme-success: #2b8f74;
+  --theme-focus: #83b2ea;
+
+  --theme-radius-sm: 6px;
+  --theme-radius-md: 8px;
+  --theme-radius-lg: 10px;
+  --theme-shadow-md: 0 10px 24px rgba(3, 13, 29, 0.45);
+  --theme-shadow-lg: 0 14px 30px rgba(2, 6, 23, 0.66);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --theme-bg-canvas: #edf2f8;
+  --theme-surface-1: #ffffff;
+  --theme-surface-2: #f3f7fd;
+  --theme-surface-3: #e8eef8;
+  --theme-border: #c4d2e4;
+  --theme-text: #1b2a3b;
+  --theme-text-muted: #5f6f85;
+  --theme-accent: #3b7fd0;
+  --theme-accent-strong: #2f67ab;
+  --theme-accent-contrast: #f7fbff;
+  --theme-success: #1f8a6d;
+  --theme-focus: #4b88cf;
+  --theme-shadow-md: 0 10px 24px rgba(16, 24, 40, 0.16);
+  --theme-shadow-lg: 0 14px 30px rgba(16, 24, 40, 0.2);
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--theme-bg-canvas);
+  color: var(--theme-text);
+  font-family: var(--theme-font-sans);
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+}
+
+#grid {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Reusable primitives for non-table UI in future projects/components */
+.theme-card {
+  background: var(--theme-surface-1);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-lg);
+  box-shadow: var(--theme-shadow-md);
+  color: var(--theme-text);
+}
+
+.theme-pill {
+  background: linear-gradient(180deg, var(--theme-surface-2), var(--theme-surface-3));
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  color: var(--theme-text);
+}
+
+.theme-input {
+  background: var(--theme-surface-1);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+  color: var(--theme-text);
+}
+
+.theme-input:focus {
+  outline: none;
+  border-color: var(--theme-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-focus) 28%, transparent);
+}
+
+.theme-btn {
+  background: linear-gradient(180deg, var(--theme-accent-strong), color-mix(in srgb, var(--theme-accent-strong) 84%, black));
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 60%, var(--theme-border));
+  border-radius: var(--theme-radius-md);
+  color: var(--theme-accent-contrast);
+}

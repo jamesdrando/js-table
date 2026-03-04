@@ -7,7 +7,9 @@ body {
 
 body {
   overflow: hidden;
-  background: #0b1220;
+  background: var(--theme-bg-canvas);
+  color: var(--theme-text);
+  font-family: var(--theme-font-sans);
 }
 
 .app-shell {
@@ -30,11 +32,11 @@ body {
   --vgt-hscroll-h: 12px;
   --vgt-radius: 9px;
   --vgt-pad-x: 8px;
-  --vgt-border: #2f3a4d;
+  --vgt-border: var(--theme-border);
   --vgt-bg: #111827;
   --vgt-head-bg: linear-gradient(180deg, #1b2433, #151d2a);
   --vgt-hover: #1a2638;
-  --vgt-muted: #9aa9bf;
+  --vgt-muted: var(--theme-text-muted);
 
   width: 720px;
   height: 360px;
@@ -43,8 +45,8 @@ body {
   border-radius: var(--vgt-radius);
   overflow: hidden;
   user-select: none;
-  font: 13px/1.2 "Segoe UI", "Aptos", "Calibri", system-ui, sans-serif;
-  color: #e5e7eb;
+  font: 13px/1.2 var(--theme-font-sans);
+  color: var(--theme-text);
   display: flex;
   flex-direction: column;
   box-shadow: none;
@@ -553,7 +555,7 @@ body {
   border-radius: 999px;
   background: linear-gradient(180deg, #2d6fb4, #245e9c);
   color: #f3f8ff;
-  font: 12px/1.1 "Segoe UI", "Aptos", "Calibri", system-ui, sans-serif;
+  font: 12px/1.1 var(--theme-font-sans);
   font-weight: 600;
   padding: 8px 14px;
   box-shadow: 0 10px 24px rgba(3, 13, 29, 0.45);

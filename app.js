@@ -1410,6 +1410,8 @@ class VirtualGridTable {
       this._hasSelection() &&
       !target.closest(".vgt__cell") &&
       !target.closest(".vgt__rowBumper") &&
+      !target.closest(".vgt__hcell") &&
+      !target.closest(".vgt__headBumper") &&
       !target.closest(".vgt__copyFabGroup") &&
       !target.closest(".vgt__ctxMenu")
     ) {
@@ -1778,17 +1780,12 @@ class VirtualGridTable {
 
     const updateFromPointer = (shouldScheduleRaf) => {
       const rect = this._rowsHost.getBoundingClientRect();
-      const leftEdge = rect.left + edgeThreshold;
-      const rightEdge = rect.right - edgeThreshold;
-      if (state.lastClientX < leftEdge) {
-        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
-        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientX > rightEdge) {
-        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
-        state.vScrollX = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScrollX = 0;
-      }
+      state.vScrollX = this._edgeVelocityX(
+        rect,
+        state.lastClientX,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
 
       const nextCol = this._colFromHeaderClientPointClamped(state.lastClientX);
       if (nextCol >= 0) this._selectColumnRange(startCol, nextCol);
@@ -1872,17 +1869,12 @@ class VirtualGridTable {
 
     const updateFromPointer = (shouldScheduleRaf) => {
       const rect = this._rowBumpers.getBoundingClientRect();
-      const topEdge = rect.top + edgeThreshold;
-      const bottomEdge = rect.bottom - edgeThreshold;
-      if (state.lastClientY < topEdge) {
-        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
-        state.vScroll = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientY > bottomEdge) {
-        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
-        state.vScroll = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScroll = 0;
-      }
+      state.vScroll = this._edgeVelocityY(
+        rect,
+        state.lastClientY,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
 
       const nextRow = this._rowFromBumperClientPointClamped(state.lastClientY);
       if (nextRow >= 0) this._selectRowRange(startRow, nextRow);
@@ -1985,30 +1977,18 @@ class VirtualGridTable {
 
     const updateFromPointer = (shouldScheduleRaf) => {
       const rect = this._rowsHost.getBoundingClientRect();
-      const leftEdge = rect.left + edgeThreshold;
-      const rightEdge = rect.right - edgeThreshold;
-      const topEdge = rect.top + edgeThreshold;
-      const bottomEdge = rect.bottom - edgeThreshold;
-
-      if (state.lastClientX < leftEdge) {
-        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
-        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientX > rightEdge) {
-        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
-        state.vScrollX = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScrollX = 0;
-      }
-
-      if (state.lastClientY < topEdge) {
-        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
-        state.vScrollY = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientY > bottomEdge) {
-        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
-        state.vScrollY = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScrollY = 0;
-      }
+      state.vScrollX = this._edgeVelocityX(
+        rect,
+        state.lastClientX,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
+      state.vScrollY = this._edgeVelocityY(
+        rect,
+        state.lastClientY,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
 
       const nextCell = this._cellFromClientPointClamped(state.lastClientX, state.lastClientY);
       if (nextCell) this._setSelectionRange(startCell, nextCell);
@@ -2096,30 +2076,18 @@ class VirtualGridTable {
       if (!startCell) return;
 
       const rect = this._rowsHost.getBoundingClientRect();
-      const leftEdge = rect.left + edgeThreshold;
-      const rightEdge = rect.right - edgeThreshold;
-      const topEdge = rect.top + edgeThreshold;
-      const bottomEdge = rect.bottom - edgeThreshold;
-
-      if (state.lastClientX < leftEdge) {
-        const ratio = this._clamp01((leftEdge - state.lastClientX) / edgeThreshold);
-        state.vScrollX = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientX > rightEdge) {
-        const ratio = this._clamp01((state.lastClientX - rightEdge) / edgeThreshold);
-        state.vScrollX = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScrollX = 0;
-      }
-
-      if (state.lastClientY < topEdge) {
-        const ratio = this._clamp01((topEdge - state.lastClientY) / edgeThreshold);
-        state.vScrollY = -ratio * maxEdgeScrollPerFrame;
-      } else if (state.lastClientY > bottomEdge) {
-        const ratio = this._clamp01((state.lastClientY - bottomEdge) / edgeThreshold);
-        state.vScrollY = ratio * maxEdgeScrollPerFrame;
-      } else {
-        state.vScrollY = 0;
-      }
+      state.vScrollX = this._edgeVelocityX(
+        rect,
+        state.lastClientX,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
+      state.vScrollY = this._edgeVelocityY(
+        rect,
+        state.lastClientY,
+        edgeThreshold,
+        maxEdgeScrollPerFrame
+      );
 
       const nextCell = this._cellFromClientPointClamped(state.lastClientX, state.lastClientY);
       if (nextCell) this._setSelectionRange(startCell, nextCell);
@@ -2331,17 +2299,15 @@ class VirtualGridTable {
     const rowCount = this._viewCount | 0;
     const colCount = this._columns.length | 0;
     if (rowCount <= 0 || colCount <= 0) return;
-    this._selectionRange = {
-      rowMin: 0,
-      rowMax: rowCount - 1,
-      colMin: 0,
-      colMax: colCount - 1,
-    };
-    this._root.focus({ preventScroll: true });
-    this._syncHeadBumperState();
-    this._renderBody();
-    this._renderHeaderSelectionState();
-    this._syncMobileCopyButton();
+    this._applySelectionRange(
+      {
+        rowMin: 0,
+        rowMax: rowCount - 1,
+        colMin: 0,
+        colMax: colCount - 1,
+      },
+      { focusRoot: true }
+    );
   }
 
   _selectRowRange(rowA, rowB) {
@@ -2350,16 +2316,12 @@ class VirtualGridTable {
     if (rowCount <= 0 || colCount <= 0) return;
     const minRow = this._clamp(Math.min(rowA | 0, rowB | 0), 0, rowCount - 1);
     const maxRow = this._clamp(Math.max(rowA | 0, rowB | 0), 0, rowCount - 1);
-    this._selectionRange = {
+    this._applySelectionRange({
       rowMin: minRow,
       rowMax: maxRow,
       colMin: 0,
       colMax: colCount - 1,
-    };
-    this._syncHeadBumperState();
-    this._renderBody();
-    this._renderHeaderSelectionState();
-    this._syncMobileCopyButton();
+    });
   }
 
   _selectColumnRange(colA, colB) {
@@ -2368,16 +2330,12 @@ class VirtualGridTable {
     if (rowCount <= 0 || colCount <= 0) return;
     const minCol = this._clamp(Math.min(colA | 0, colB | 0), 0, colCount - 1);
     const maxCol = this._clamp(Math.max(colA | 0, colB | 0), 0, colCount - 1);
-    this._selectionRange = {
+    this._applySelectionRange({
       rowMin: 0,
       rowMax: rowCount - 1,
       colMin: minCol,
       colMax: maxCol,
-    };
-    this._syncHeadBumperState();
-    this._renderBody();
-    this._renderHeaderSelectionState();
-    this._syncMobileCopyButton();
+    });
   }
 
   _setSelectionRange(anchorCell, focusCell) {
@@ -2385,12 +2343,17 @@ class VirtualGridTable {
     const rowB = focusCell.row | 0;
     const colA = anchorCell.col | 0;
     const colB = focusCell.col | 0;
-    this._selectionRange = {
+    this._applySelectionRange({
       rowMin: Math.min(rowA, rowB),
       rowMax: Math.max(rowA, rowB),
       colMin: Math.min(colA, colB),
       colMax: Math.max(colA, colB),
-    };
+    });
+  }
+
+  _applySelectionRange(range, options = {}) {
+    this._selectionRange = range;
+    if (options.focusRoot) this._root.focus({ preventScroll: true });
     this._syncHeadBumperState();
     this._renderBody();
     this._renderHeaderSelectionState();
@@ -2844,6 +2807,38 @@ class VirtualGridTable {
     return typeof value === "number" ? value + "px" : String(value);
   }
 
+  _edgeVelocity(point, minEdge, maxEdge, edgeThreshold, maxEdgeScrollPerFrame) {
+    if (point < minEdge) {
+      const ratio = this._clamp01((minEdge - point) / edgeThreshold);
+      return -ratio * maxEdgeScrollPerFrame;
+    }
+    if (point > maxEdge) {
+      const ratio = this._clamp01((point - maxEdge) / edgeThreshold);
+      return ratio * maxEdgeScrollPerFrame;
+    }
+    return 0;
+  }
+
+  _edgeVelocityX(rect, clientX, edgeThreshold, maxEdgeScrollPerFrame) {
+    return this._edgeVelocity(
+      clientX,
+      rect.left + edgeThreshold,
+      rect.right - edgeThreshold,
+      edgeThreshold,
+      maxEdgeScrollPerFrame
+    );
+  }
+
+  _edgeVelocityY(rect, clientY, edgeThreshold, maxEdgeScrollPerFrame) {
+    return this._edgeVelocity(
+      clientY,
+      rect.top + edgeThreshold,
+      rect.bottom - edgeThreshold,
+      edgeThreshold,
+      maxEdgeScrollPerFrame
+    );
+  }
+
   _clamp01(x) {
     return x < 0 ? 0 : x > 1 ? 1 : x;
   }
@@ -2854,6 +2849,12 @@ class VirtualGridTable {
 }
 
 window.VirtualGridTable = VirtualGridTable;
+
+window.setAppTheme = function setAppTheme(mode) {
+  const theme = mode === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", theme);
+  return theme;
+};
 
 const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
@@ -2924,4 +2925,3 @@ if (grid._opts.demo_mode === "chunked") {
     grid.setLoading(false);
   }, 250);
 }
-
