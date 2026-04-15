@@ -2856,6 +2856,165 @@ window.setAppTheme = function setAppTheme(mode) {
   return theme;
 };
 
+function pick(list, index) {
+  return list[index % list.length];
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatFakeTimestamp(index) {
+  const month = (index % 12) + 1;
+  const day = ((index * 7) % 28) + 1;
+  const hour = (index * 3) % 24;
+  const minute = (index * 11) % 60;
+  return `2026-${pad2(month)}-${pad2(day)} ${pad2(hour)}:${pad2(minute)}`;
+}
+
+function makeFakeCustomerName(index) {
+  const firstNames = [
+    "Nova",
+    "Pixel",
+    "Velvet",
+    "Orbit",
+    "Moxie",
+    "Zippy",
+    "Quasar",
+    "Echo",
+    "Rivet",
+    "Indigo",
+    "Jett",
+    "Kilo",
+  ];
+  const surnames = [
+    "McTestface",
+    "Placeholder",
+    "Sampleton",
+    "Demochild",
+    "Pretendwell",
+    "Fauxworthy",
+    "Mockridge",
+    "Standin",
+    "Inventson",
+    "Fictioneer",
+    "Specimen",
+    "Bogusby",
+  ];
+  return `${pick(firstNames, index)} ${pick(surnames, index * 5 + 3)}`;
+}
+
+function makeFakeProductDescription(index) {
+  const adjectives = [
+    "Neon",
+    "Pocket",
+    "Modular",
+    "Weatherproof",
+    "Glow-in-the-dark",
+    "Ultra-lite",
+    "Retro",
+    "Quantum-ish",
+    "Desk-ready",
+    "Midnight",
+    "Noise-loving",
+    "Overclocked",
+  ];
+  const materials = [
+    "alloy",
+    "carbon shell",
+    "velvet polymer",
+    "soft-touch resin",
+    "ceramic mesh",
+    "faux titanium",
+    "matte graphite",
+    "translucent acrylic",
+    "rubberized steel",
+    "woven nylon",
+  ];
+  const products = [
+    "signal booster",
+    "espresso drone dock",
+    "keyboard shrine",
+    "cable wrangler",
+    "monitor halo bar",
+    "sidecar battery brick",
+    "thermal mug sleeve",
+    "desktop launch switch",
+    "pixel badge printer",
+    "ambient fan tower",
+    "sticker vault",
+    "tiny fog machine",
+  ];
+  const features = [
+    "for suspiciously enthusiastic workflows",
+    "with reversible charging fins",
+    "featuring zero practical restraint",
+    "for late-night spreadsheet heroics",
+    "with optional dramatic backlighting",
+    "for desks that take themselves too seriously",
+    "with a politely unnecessary turbo mode",
+    "for chaotic-neutral professionals",
+    "with anti-boring trim panels",
+    "for controlled aesthetic overkill",
+  ];
+  return [
+    pick(adjectives, index),
+    pick(materials, index * 2 + 1),
+    pick(products, index * 3 + 2),
+    pick(features, index * 7 + 4),
+  ].join(" ");
+}
+
+function buildDemoTransaction(index) {
+  const channels = ["web", "retail", "partner", "field", "kiosk"];
+  const regions = ["NA-CENTRAL", "NA-WEST", "EU-NORTH", "APAC-LAB", "MOON-BASE-2"];
+  const statuses = ["PAID", "PENDING", "REVIEW", "HOLD", "REFUNDED"];
+  const repFirstNames = [
+    "Cass",
+    "Juno",
+    "Milo",
+    "Tess",
+    "Rex",
+    "Poppy",
+    "Dax",
+    "Vera",
+    "Nico",
+    "Lux",
+    "Ivy",
+    "Otto",
+  ];
+  const repLastNames = [
+    "Draft",
+    "Mercer",
+    "Vale",
+    "Onyx",
+    "Wilder",
+    "Knox",
+    "Hollow",
+    "Fable",
+    "Sterling",
+    "Voss",
+    "Marlowe",
+    "Sable",
+  ];
+  const qty = (index % 9) + 1;
+  const unitPrice = 19 + ((index * 17) % 240) + ((index % 5) * 0.95);
+  return {
+    order_id: `TXN-${String(index + 1).padStart(6, "0")}`,
+    customer: makeFakeCustomerName(index),
+    product: makeFakeProductDescription(index),
+    qty,
+    unit_price: unitPrice.toFixed(2),
+    total: (qty * unitPrice).toFixed(2),
+    channel: pick(channels, index * 2 + 1),
+    region: pick(regions, index * 3 + 2),
+    status: pick(statuses, index * 3 + 4),
+    rep: `${pick(repFirstNames, index * 2 + 1)} ${pick(repLastNames, index * 3 + 2)}`,
+    memo: index % 6 === 0 ? "Generated preview row for UI testing" : "",
+    placed_at: formatFakeTimestamp(index),
+  };
+}
+
 const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
   visibleCols: 6,
@@ -2909,15 +3068,7 @@ if (grid._opts.demo_mode === "chunked") {
 
   const demo = [];
   for (let i = 0; i < grid._opts.demo_rows; i += 1) {
-    demo.push({
-      id: i + 1,
-      name: "Item " + (i + 1),
-      qty: (i % 13) + 1,
-      price: ((i % 97) + 1) * 1.25,
-      category: ["A", "B", "C", "D"][i % 4],
-      note: i % 5 === 0 ? "longer text that should ellipsize nicely" : "",
-      ts: Date.now() - i * 1000,
-    });
+    demo.push(buildDemoTransaction(i));
   }
 
   setTimeout(() => {
