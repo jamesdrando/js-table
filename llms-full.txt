@@ -1,0 +1,126 @@
+# js-table full agent summary
+
+## What this project is
+
+`js-table` is a browser-only virtual table/grid implemented in `/app.js`. It exposes `window.VirtualGridTable`, mounts into a container by id, and supports local data or chunked remote data.
+
+## What this project is not
+
+- No TypeScript support
+- No npm package or module exports
+- No column virtualization
+- No frozen columns, grouped rows, or editable cells
+
+## Constructor
+
+### `new VirtualGridTable(containerId, options?)`
+
+- `containerId`: string id of an existing DOM node
+- `options.width`: CSS size or number, default `"100%"`
+- `options.height`: CSS size or number, default `"100%"`
+- `options.rowHeight`: number, default `28`
+- `options.visibleCols`: number used for initial width heuristics, default `6`
+- `options.overscan`: extra pooled rows above/below the viewport, default `2`
+- `options.mode`: `"local"` or `"chunked"`, default `"local"`
+- `options.chunkSize`: default `250`
+- `options.totalRows`: initial total for chunked mode, default `0`
+- `options.onChunkRequest`: optional callback for chunk requests
+- `options.fetchChunk`: optional sync/async chunk provider
+
+## Core methods
+
+- `setLoading(boolean)`
+- `setData(arrayOfObjects | { columns, rows })`
+- `setSearch(string)`
+- `setSearchColumn(index | -1)`
+- `clearSearch()`
+- `setFilter(fn)`
+- `clearFilter()`
+- `setColumnFilter(index, { op, value, valueTo? })`
+- `clearColumnFilters()`
+- `sortBy(index, "asc" | "desc" | null)`
+- `clearSort()`
+- `setChunkMode({ columns, totalRows, chunkSize, onChunkRequest?, fetchChunk? })`
+- `setChunkRows(startIndex, rows, totalRows?)`
+- `setChunkRowCount(totalRows, rerender?)`
+- `clearChunkCache()`
+- `getOffsets()`
+- `destroy()`
+
+## Local mode data shapes
+
+### Array of objects
+
+Columns are inferred from the first object key order.
+
+```js
+grid.setData([
+  { id: 1, customer: "Ada", total: "19.00" },
+  { id: 2, customer: "Grace", total: "29.00" }
+]);
+```
+
+### Explicit schema
+
+```js
+grid.setData({
+  columns: [
+    { key: "id", label: "Order ID", width: 120 },
+    { key: "customer", label: "Customer" },
+    { key: "total", label: "Total" }
+  ],
+  rows: [
+    ["TXN-1", "Ada", "19.00"],
+    ["TXN-2", "Grace", "29.00"]
+  ]
+});
+```
+
+## Local query pipeline
+
+When local data is active, rows are processed in this order:
+
+1. `setFilter(fn)`
+2. `setColumnFilter(...)`
+3. `setSearch(...)` / `setSearchColumn(...)`
+4. `sortBy(...)`
+
+## Chunked mode request contract
+
+Chunk providers receive:
+
+```js
+{
+  id,
+  start,
+  endExclusive,
+  size,
+  reason,
+  totalRows,
+  query,
+  searchColumn,
+  hasCustomFilter,
+  sort,          // null or { colIndex, dir: "asc" | "desc" }
+  columnFilters  // [{ colIndex, op, value, valueTo }]
+}
+```
+
+Accepted responses:
+
+- `rowsArray`
+- `{ start, rows, totalRows }`
+
+## High-signal gotchas
+
+- Pass a container id string, not an element.
+- `setData([])` yields zero columns because inference uses the first row.
+- Chunked mode does not run local search/filter/sort over cached rows; providers must honor request state.
+- `setFilter(fn)` does not serialize into chunk requests.
+- Selecting all cells causes default clipboard export to include headers.
+- The app also exposes `window.setAppTheme("dark" | "light")`.
+
+## Pointers
+
+- Detailed API: `./docs/api.md`
+- Rendering model: `./docs/architecture.md`
+- Recipes: `./docs/cookbook.md`
