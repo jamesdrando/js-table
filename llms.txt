@@ -1,0 +1,20 @@
+# js-table
+
+> Browser-only virtual data grid/table with row virtualization, local querying, chunked loading, selection, and clipboard copy.
+
+## Start here
+
+- [Agent guide](./AGENTS.md)
+- [API reference](./docs/api.md)
+- [Architecture](./docs/architecture.md)
+- [Cookbook](./docs/cookbook.md)
+- [Single-file agent summary](./llms-full.txt)
+
+## Important constraints
+
+- Global browser API: `window.VirtualGridTable`
+- Constructor takes a container **id string**
+- No TypeScript support currently
+- No npm/ESM/CommonJS package currently
+- Row virtualization only
+- Chunked mode expects the provider to apply search/sort/filter state
