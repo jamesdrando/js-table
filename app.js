@@ -1408,15 +1408,26 @@ class VirtualGridTable {
     }
     if (
       this._hasSelection() &&
-      !target.closest(".vgt__cell") &&
-      !target.closest(".vgt__rowBumper") &&
-      !target.closest(".vgt__hcell") &&
-      !target.closest(".vgt__headBumper") &&
-      !target.closest(".vgt__copyFabGroup") &&
-      !target.closest(".vgt__ctxMenu")
+      !this._shouldRetainSelectionOnPointerDown(target)
     ) {
       this._clearSelection();
     }
+  }
+
+  _shouldRetainSelectionOnPointerDown(target) {
+    if (!(target instanceof Element) || !this._root?.contains(target)) return false;
+    return Boolean(
+      target.closest(".vgt__cell") ||
+      target.closest(".vgt__rowBumper") ||
+      target.closest(".vgt__hcell") ||
+      target.closest(".vgt__headBumper") ||
+      target.closest(".vgt__copyFabGroup") ||
+      target.closest(".vgt__ctxMenu") ||
+      target.closest(".vgt__scroll") ||
+      target.closest(".vgt__hscroll") ||
+      target.closest(".vgt__navBtn") ||
+      target.closest(".vgt__corner")
+    );
   }
 
   _renderBody() {
