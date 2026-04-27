@@ -214,11 +214,16 @@ html[data-theme="light"] .vgt__filterDivider {
 
 html[data-theme="light"] .vgt__filterOp,
 html[data-theme="light"] .vgt__filterInput,
+html[data-theme="light"] .vgt__formatColorInput,
 html[data-theme="light"] .vgt__searchSelect,
 html[data-theme="light"] .vgt__searchInput {
   border-color: #ff9fbe;
   background: #fff1f6;
   color: #3a0f1b;
+}
+
+html[data-theme="light"] .vgt__formatColorField {
+  color: #8b4c62;
 }
 
 html[data-theme="light"] .vgt__footer {
@@ -238,7 +243,10 @@ html[data-theme="light"] .vgt__searchInput::placeholder {
 html[data-theme="light"] .vgt__ctxMenuItem:focus,
 html[data-theme="light"] .vgt__filterBtn:focus,
 html[data-theme="light"] .vgt__searchSelect:focus,
-html[data-theme="light"] .vgt__searchInput:focus {
+html[data-theme="light"] .vgt__searchInput:focus,
+html[data-theme="light"] .vgt__filterOp:focus,
+html[data-theme="light"] .vgt__filterInput:focus,
+html[data-theme="light"] .vgt__formatColorInput:focus {
   border-color: #ff2f6d;
   box-shadow: 0 0 0 2px rgba(255, 47, 109, 0.18);
 }

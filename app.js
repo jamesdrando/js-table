@@ -10,6 +10,10 @@
  * - clearFilter()
  * - setColumnFilter(index, filterSpec)
  * - clearColumnFilters()
+ * - setCellClass(fn)
+ * - setConditionalFormat(index, formatSpec)
+ * - setConditionalFormats(formatSpecs)
+ * - clearConditionalFormats(index?)
  * - sortBy(index, "asc" | "desc" | null)
  * - clearSort()
  * - setChunkMode({ columns, totalRows, chunkSize, onChunkRequest?, fetchChunk? })
@@ -31,6 +35,7 @@ class VirtualGridTable {
     totalRows: 0,
     onChunkRequest: null,
     fetchChunk: null,
+    cellClass: null,
     demo_mode: false,
     demo_rows: 10000,
   };
@@ -63,6 +68,9 @@ class VirtualGridTable {
     this._searchColumn = -1;
     this._sort = null;
     this._columnFilters = new Map();
+    this._cellClass = typeof this._opts.cellClass === "function" ? this._opts.cellClass : null;
+    this._conditionalFormats = [];
+    this._conditionalFormatCols = new Map();
     this._filterMenuCol = -1;
 
     this._searchCache = [];
@@ -116,6 +124,8 @@ class VirtualGridTable {
     this._chunkTotalRows = rows.length;
     this._ensureColWidths(true);
     this._columnFilters.clear();
+    this._conditionalFormats = [];
+    this._rebuildConditionalFormatIndex();
     this._closeFilterMenu();
 
     this._resetPipelineState();
@@ -188,6 +198,53 @@ class VirtualGridTable {
     this._onQueryStateChanged("column-filter");
   }
 
+  setCellClass(cellClassFn) {
+    this._cellClass = typeof cellClassFn === "function" ? cellClassFn : null;
+    this._renderBody();
+  }
+
+  setConditionalFormat(colIndex, formatSpec) {
+    const abs = colIndex | 0;
+    if (abs < 0 || abs >= this._columns.length) return;
+
+    const next = this._normalizeConditionalFormat(abs, formatSpec);
+    this._conditionalFormats = this._conditionalFormats.filter((rule) => rule.colIndex !== abs);
+    if (next) this._conditionalFormats.push(next);
+    this._rebuildConditionalFormatIndex();
+
+    this._renderHeader();
+    this._renderBody();
+  }
+
+  setConditionalFormats(formatSpecs) {
+    this._conditionalFormats = [];
+    const specs = Array.isArray(formatSpecs) ? formatSpecs : [];
+    for (let i = 0; i < specs.length; i += 1) {
+      const spec = specs[i];
+      if (!spec || typeof spec !== "object") continue;
+      const abs = spec.colIndex ?? spec.column ?? spec.index;
+      const colIndex = abs | 0;
+      if (colIndex < 0 || colIndex >= this._columns.length) continue;
+      const next = this._normalizeConditionalFormat(colIndex, spec);
+      if (next) this._conditionalFormats.push(next);
+    }
+    this._rebuildConditionalFormatIndex();
+    this._renderHeader();
+    this._renderBody();
+  }
+
+  clearConditionalFormats(colIndex) {
+    if (colIndex == null) {
+      if (this._conditionalFormats.length === 0) return;
+      this._conditionalFormats = [];
+    } else {
+      this._conditionalFormats = this._conditionalFormats.filter((rule) => rule.colIndex !== (colIndex | 0));
+    }
+    this._rebuildConditionalFormatIndex();
+    this._renderHeader();
+    this._renderBody();
+  }
+
   setChunkMode(config = {}) {
     const next = config && typeof config === "object" ? config : {};
     if (typeof next.chunkSize === "number" && Number.isFinite(next.chunkSize)) {
@@ -208,6 +265,8 @@ class VirtualGridTable {
     this._chunkRows.clear();
     this._chunkPending.clear();
     this._columnFilters.clear();
+    this._conditionalFormats = [];
+    this._rebuildConditionalFormatIndex();
     this._closeFilterMenu();
     this.setChunkRowCount(next.totalRows ?? 0, false);
     this._resetPipelineState();
@@ -629,6 +688,90 @@ class VirtualGridTable {
     filterActions.append(applyFilterBtn, clearFilterBtn);
     filterMenu.append(filterActions);
 
+    const formatDivider = document.createElement("div");
+    formatDivider.className = "vgt__filterDivider";
+    filterMenu.append(formatDivider);
+
+    const formatLabel = document.createElement("div");
+    formatLabel.className = "vgt__filterSection";
+    formatLabel.textContent = "Format";
+    filterMenu.append(formatLabel);
+
+    const formatOp = document.createElement("select");
+    formatOp.className = "vgt__filterOp vgt__formatOp";
+    for (let i = 0; i < filterOps.length; i += 1) {
+      const option = document.createElement("option");
+      option.value = filterOps[i];
+      option.textContent = filterOps[i];
+      formatOp.append(option);
+    }
+    formatOp.addEventListener("change", () => this._syncFilterMenuInputs());
+    filterMenu.append(formatOp);
+    this._formatOp = formatOp;
+
+    const formatValueA = document.createElement("input");
+    formatValueA.className = "vgt__filterInput vgt__formatInput";
+    formatValueA.type = "text";
+    formatValueA.placeholder = "Value";
+    formatValueA.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this._applyFormatMenu();
+      }
+    });
+    filterMenu.append(formatValueA);
+    this._formatValueA = formatValueA;
+
+    const formatValueB = document.createElement("input");
+    formatValueB.className = "vgt__filterInput vgt__formatInput";
+    formatValueB.type = "text";
+    formatValueB.placeholder = "And";
+    formatValueB.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this._applyFormatMenu();
+      }
+    });
+    filterMenu.append(formatValueB);
+    this._formatValueB = formatValueB;
+
+    const formatColors = document.createElement("div");
+    formatColors.className = "vgt__formatColors";
+
+    const formatBgLabel = document.createElement("label");
+    formatBgLabel.className = "vgt__formatColorField";
+    formatBgLabel.textContent = "Background";
+    const formatBg = document.createElement("input");
+    formatBg.className = "vgt__formatColorInput";
+    formatBg.type = "color";
+    formatBg.value = "#2d0c17";
+    formatBgLabel.append(formatBg);
+    this._formatBg = formatBg;
+
+    const formatTextLabel = document.createElement("label");
+    formatTextLabel.className = "vgt__formatColorField";
+    formatTextLabel.textContent = "Text";
+    const formatText = document.createElement("input");
+    formatText.className = "vgt__formatColorInput";
+    formatText.type = "color";
+    formatText.value = "#ffe2ec";
+    formatTextLabel.append(formatText);
+    this._formatText = formatText;
+
+    formatColors.append(formatBgLabel, formatTextLabel);
+    filterMenu.append(formatColors);
+
+    const formatActions = document.createElement("div");
+    formatActions.className = "vgt__filterActions";
+    const applyFormatBtn = this._createButton("vgt__pill vgt__formatApply", "Apply format", () => this._applyFormatMenu());
+    const clearFormatBtn = this._createButton("vgt__pill vgt__formatClear", "Clear format", () => {
+      if (this._filterMenuCol < 0) return;
+      this.clearConditionalFormats(this._filterMenuCol);
+      this._closeFilterMenu();
+    });
+    formatActions.append(applyFormatBtn, clearFormatBtn);
+    filterMenu.append(formatActions);
+
     const contextMenu = document.createElement("div");
     contextMenu.className = "vgt__ctxMenu";
     contextMenu.dataset.open = "0";
@@ -939,6 +1082,63 @@ class VirtualGridTable {
     return { op, value, valueTo };
   }
 
+  _normalizeConditionalFormat(colIndex, formatSpec) {
+    const condition = this._normalizeColumnFilter(formatSpec);
+    if (!condition) return null;
+
+    const backgroundColor = this._normalizeCssColor(
+      formatSpec.backgroundColor ?? formatSpec.bgColor ?? formatSpec.background
+    );
+    const color = this._normalizeCssColor(formatSpec.color ?? formatSpec.textColor ?? formatSpec.foregroundColor);
+    if (!backgroundColor && !color) return null;
+
+    return {
+      colIndex,
+      ...condition,
+      backgroundColor,
+      color,
+    };
+  }
+
+  _rebuildConditionalFormatIndex() {
+    this._conditionalFormatCols = new Map();
+    for (let i = 0; i < this._conditionalFormats.length; i += 1) {
+      const rule = this._conditionalFormats[i];
+      const list = this._conditionalFormatCols.get(rule.colIndex);
+      if (list) {
+        list.push(rule);
+      } else {
+        this._conditionalFormatCols.set(rule.colIndex, [rule]);
+      }
+    }
+  }
+
+  _hasConditionalFormat(colIndex) {
+    return this._conditionalFormatCols.has(colIndex | 0);
+  }
+
+  _firstConditionalFormatForColumn(colIndex) {
+    const list = this._conditionalFormatCols.get(colIndex | 0);
+    return list?.[0] ?? null;
+  }
+
+  _matchingConditionalFormat(colIndex, value) {
+    const list = this._conditionalFormatCols.get(colIndex | 0);
+    if (!list) return null;
+    for (let i = 0; i < list.length; i += 1) {
+      if (this._matchesColumnFilter(value, list[i])) return list[i];
+    }
+    return null;
+  }
+
+  _normalizeCssColor(value) {
+    if (value == null) return "";
+    const color = String(value).trim();
+    if (!color) return "";
+    if (/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color)) return color;
+    return "";
+  }
+
   _matchesColumnFilter(cellValue, spec) {
     const leftRaw = cellValue == null ? "" : String(cellValue).trim();
     const left = leftRaw.toLowerCase();
@@ -1228,8 +1428,8 @@ class VirtualGridTable {
       const filterBtn = document.createElement("button");
       filterBtn.className = "vgt__filterBtn vgt__triBtn vgt__triBtn--down";
       filterBtn.type = "button";
-      filterBtn.title = "Column filter and sort";
-      filterBtn.dataset.active = this._columnFilters.has(abs) ? "1" : "0";
+      filterBtn.title = "Column filter, sort, and format";
+      filterBtn.dataset.active = this._columnFilters.has(abs) || this._hasConditionalFormat(abs) ? "1" : "0";
       filterBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1277,15 +1477,35 @@ class VirtualGridTable {
 
   _openFilterMenu(absCol, anchorEl) {
     const col = this._columns[absCol];
-    if (!col || !this._filterMenu || !this._filterOp || !this._filterValueA || !this._filterValueB || !this._filterSortBtn) return;
+    if (
+      !col ||
+      !this._filterMenu ||
+      !this._filterOp ||
+      !this._filterValueA ||
+      !this._filterValueB ||
+      !this._filterSortBtn ||
+      !this._formatOp ||
+      !this._formatValueA ||
+      !this._formatValueB ||
+      !this._formatBg ||
+      !this._formatText
+    ) {
+      return;
+    }
 
     this._filterMenuCol = absCol;
     const existing = this._columnFilters.get(absCol);
-    this._filterTitle.textContent = "Filter: " + String(col.label ?? col.key ?? "Column " + (absCol + 1));
+    const existingFormat = this._firstConditionalFormatForColumn(absCol);
+    this._filterTitle.textContent = "Column: " + String(col.label ?? col.key ?? "Column " + (absCol + 1));
     this._filterOp.value = existing?.op ?? "like";
     this._filterValueA.value = existing?.value ?? "";
     this._filterValueB.value = existing?.valueTo ?? "";
     this._setFilterSortState(this._sort && this._sort.colIndex === absCol ? (this._sort.dir === 1 ? "asc" : "desc") : "none");
+    this._formatOp.value = existingFormat?.op ?? "like";
+    this._formatValueA.value = existingFormat?.value ?? "";
+    this._formatValueB.value = existingFormat?.valueTo ?? "";
+    this._formatBg.value = existingFormat?.backgroundColor || "#2d0c17";
+    this._formatText.value = existingFormat?.color || "#ffe2ec";
     this._syncFilterMenuInputs();
 
     this._filterMenu.dataset.open = "1";
@@ -1320,6 +1540,11 @@ class VirtualGridTable {
     const isBetween = this._filterOp.value === "between";
     this._filterValueB.style.display = isBetween ? "block" : "none";
     this._filterValueB.disabled = !isBetween;
+    if (this._formatOp && this._formatValueB) {
+      const isFormatBetween = this._formatOp.value === "between";
+      this._formatValueB.style.display = isFormatBetween ? "block" : "none";
+      this._formatValueB.disabled = !isFormatBetween;
+    }
   }
 
   _applyFilterMenu() {
@@ -1336,6 +1561,19 @@ class VirtualGridTable {
     } else if (this._sort && this._sort.colIndex === absCol) {
       this.clearSort();
     }
+  }
+
+  _applyFormatMenu() {
+    if (this._filterMenuCol < 0 || !this._formatOp || !this._formatValueA || !this._formatValueB || !this._formatBg || !this._formatText) return;
+    const absCol = this._filterMenuCol | 0;
+    this.setConditionalFormat(absCol, {
+      op: this._formatOp.value,
+      value: this._formatValueA.value,
+      valueTo: this._formatOp.value === "between" ? this._formatValueB.value : "",
+      backgroundColor: this._formatBg.value,
+      color: this._formatText.value,
+    });
+    this._closeFilterMenu();
   }
 
   _nextSortState(state) {
@@ -1493,7 +1731,8 @@ class VirtualGridTable {
         const value = row ? row[c] : c === 0 ? "Loading..." : "";
         const cellEl = slot.cellEls[c];
         cellEl.textContent = value == null ? "" : String(value);
-        cellEl.classList.toggle("vgt__cell--selected", this._isCellSelected(viewIndex, c));
+        this._applyCellFormatting(cellEl, value, row, viewIndex, baseIndex, c);
+        if (this._isCellSelected(viewIndex, c)) cellEl.classList.add("vgt__cell--selected");
       }
     }
 
@@ -1501,6 +1740,48 @@ class VirtualGridTable {
       const reason = this._nextChunkReason ?? "viewport";
       this._nextChunkReason = null;
       this._ensureChunkForViewport(reason);
+    }
+  }
+
+  _applyCellFormatting(cellEl, value, row, viewIndex, baseIndex, colIndex) {
+    cellEl.className = "vgt__cell";
+    cellEl.removeAttribute("data-format-bg");
+    cellEl.removeAttribute("data-format-color");
+    cellEl.style.removeProperty("--vgt-cell-bg");
+    cellEl.style.removeProperty("--vgt-cell-color");
+    if (!row) return;
+
+    const format = this._matchingConditionalFormat(colIndex, value);
+    if (format) {
+      if (format.backgroundColor) {
+        cellEl.dataset.formatBg = "1";
+        cellEl.style.setProperty("--vgt-cell-bg", format.backgroundColor);
+      }
+      if (format.color) {
+        cellEl.dataset.formatColor = "1";
+        cellEl.style.setProperty("--vgt-cell-color", format.color);
+      }
+    }
+
+    if (this._cellClass) {
+      this._addCellClasses(
+        cellEl,
+        this._cellClass(value, row, {
+          viewRow: viewIndex,
+          baseIndex,
+          colIndex,
+          column: this._columns[colIndex],
+        })
+      );
+    }
+  }
+
+  _addCellClasses(cellEl, classValue) {
+    if (!classValue) return;
+    const classes = Array.isArray(classValue) ? classValue : String(classValue).split(/\s+/);
+    for (let i = 0; i < classes.length; i += 1) {
+      const className = String(classes[i] ?? "").trim();
+      if (className) cellEl.classList.add(className);
     }
   }
 
@@ -3084,6 +3365,29 @@ if (grid._opts.demo_mode === "chunked") {
 
   setTimeout(() => {
     grid.setData(demo);
+    grid.setConditionalFormats([
+      {
+        colIndex: 5,
+        op: ">",
+        value: "1200",
+        backgroundColor: "#173b2f",
+        color: "#b7f7d8",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "HOLD",
+        backgroundColor: "#4a1b1f",
+        color: "#ffd0d7",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "REFUNDED",
+        backgroundColor: "#332047",
+        color: "#ead7ff",
+      },
+    ]);
     grid.setLoading(false);
   }, 250);
 }

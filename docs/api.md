@@ -20,6 +20,7 @@ Creates and mounts a virtual grid into an existing DOM element.
 - `options.totalRows` `number` — initial total row count for chunked mode, default `0`
 - `options.onChunkRequest` `(request) => void | response` — optional side-effect or fallback callback
 - `options.fetchChunk` `(request) => response | Promise<response>` — optional chunk provider
+- `options.cellClass` `(value, rowArray, ctx) => string | string[]` — optional visible-cell class callback
 - `options.demo_mode` `boolean | "chunked"` — demo-only option used by the sample page
 - `options.demo_rows` `number` — demo-only row count used by the sample page
 
@@ -182,6 +183,67 @@ grid.setColumnFilter(3, { op: "between", value: "A", valueTo: "M" });
 **Returns:** `void`
 
 Removes all column filters.
+
+## `setCellClass(cellClassFn)`
+
+**Category:** rendering
+**Returns:** `void`
+
+Sets a callback that can add CSS classes to visible cells during render.
+
+**Parameters**
+
+- `cellClassFn` `(value, rowArray, ctx) => string | string[]`
+- `ctx.viewRow` `number`
+- `ctx.baseIndex` `number`
+- `ctx.colIndex` `number`
+- `ctx.column` `object`
+
+**Notes**
+
+- Runs only for pooled visible cells
+- Pass `null` to clear the callback
+
+## `setConditionalFormat(colIndex, formatSpec)`
+
+**Category:** rendering
+**Returns:** `void`
+
+Sets one conditional format rule for a column.
+
+**Parameters**
+
+- `colIndex` `number`
+- `formatSpec.op` `"like" | "=" | ">" | "<" | ">=" | "<=" | "not" | "between"`
+- `formatSpec.value` `string`
+- `formatSpec.valueTo` `string` — required for `between`
+- `formatSpec.backgroundColor` `"#rrggbb" | "#rgb"`
+- `formatSpec.color` `"#rrggbb" | "#rgb"`
+
+**Example**
+
+```js
+grid.setConditionalFormat(5, {
+  op: ">",
+  value: "1200",
+  backgroundColor: "#173b2f",
+  color: "#b7f7d8"
+});
+```
+
+## `setConditionalFormats(formatSpecs)`
+
+**Category:** rendering
+**Returns:** `void`
+
+Replaces all conditional format rules. Multiple rules can target the same column; the first matching rule wins.
+
+## `clearConditionalFormats(colIndex?)`
+
+**Category:** rendering
+**Returns:** `void`
+
+Clears conditional formats for one column, or all columns when no index is passed.
 
 ## `sortBy(colIndex, dir)`
 

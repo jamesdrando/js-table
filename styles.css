@@ -393,6 +393,14 @@ body {
   color: #f7d9e6;
 }
 
+.vgt__cell[data-format-bg="1"] {
+  background: var(--vgt-cell-bg);
+}
+
+.vgt__cell[data-format-color="1"] {
+  color: var(--vgt-cell-color);
+}
+
 .vgt__cell.vgt__cell--selected {
   background: rgba(255, 47, 109, 0.18);
   box-shadow: inset 0 0 0 1px rgba(255, 118, 163, 0.52);
@@ -617,7 +625,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 220px;
+  width: 260px;
   display: none;
   z-index: 10;
   border: 1px solid #334152;
@@ -660,6 +668,30 @@ body {
   color: #e3e9f0;
   font: inherit;
   width: 100%;
+}
+
+.vgt__formatColors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vgt__formatColorField {
+  display: grid;
+  gap: 4px;
+  color: #a795a1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vgt__formatColorInput {
+  width: 100%;
+  height: 30px;
+  border: 1px solid #383842;
+  border-radius: 0;
+  background: #121217;
+  padding: 2px;
+  cursor: pointer;
 }
 
 .vgt__filterActions {
@@ -758,7 +790,10 @@ body {
 }
 
 .vgt__searchSelect:focus,
-.vgt__searchInput:focus {
+.vgt__searchInput:focus,
+.vgt__filterOp:focus,
+.vgt__filterInput:focus,
+.vgt__formatColorInput:focus {
   outline: none;
   border-color: #ff5b95;
   box-shadow: 0 0 0 2px rgba(255, 91, 149, 0.24);
@@ -817,7 +852,7 @@ body {
   }
 
   .vgt__filterMenu {
-    width: min(220px, calc(100vw - 24px));
+    width: min(260px, calc(100vw - 24px));
   }
 }
 
