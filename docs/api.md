@@ -21,6 +21,11 @@ Creates and mounts a virtual grid into an existing DOM element.
 - `options.onChunkRequest` `(request) => void | response` — optional side-effect or fallback callback
 - `options.fetchChunk` `(request) => response | Promise<response>` — optional chunk provider
 - `options.cellClass` `(value, rowArray, ctx) => string | string[]` — optional visible-cell class callback
+- `options.editable` `boolean` — enables local-mode editing controls, default `false`
+- `options.paste` `boolean` — enables clipboard paste when editable, default `true`
+- `options.deleteSelection` `boolean` — enables Delete/Backspace clearing when editable, default `true`
+- `options.onCellsChange` `(changes) => void` — optional callback after local cell values change
+- `options.historyLimit` `number` — number of undo/redo operations kept, default `20`
 - `options.demo_mode` `boolean | "chunked"` — demo-only option used by the sample page
 - `options.demo_rows` `number` — demo-only row count used by the sample page
 
@@ -38,6 +43,7 @@ const grid = new window.VirtualGridTable("grid", {
 
 - Passing an `HTMLElement` instead of the container id string
 - Assuming `visibleCols` limits the rendered column count; it only affects width heuristics
+- Expecting `editable` to work in chunked mode; editing is local mode only
 
 ## `setLoading(isLoading)`
 
@@ -203,6 +209,43 @@ Sets a callback that can add CSS classes to visible cells during render.
 
 - Runs only for pooled visible cells
 - Pass `null` to clear the callback
+
+## `setEditable(isEditable)`
+
+**Category:** local editing  
+**Returns:** `void`
+
+Enables or disables local-mode editing after construction.
+
+**Parameters**
+
+- `isEditable` `boolean`
+
+**Notes**
+
+- Editing is ignored in chunked mode
+- `Read` mode blocks editing; `Edit` mode enables it
+- Disabling editing commits any active cell editor first
+- In Edit mode, typing in a selected cell edits that rectangular selection and `Enter`/`Tab` move to the next line/column
+- Press `Enter` or blur the editor to commit
+- Press `Escape` to cancel the active edit
+- Paste accepts Excel-style tab/newline text into the selected cell range
+- `Delete` and `Backspace` clear the current selection when `deleteSelection` is enabled
+
+**Change callback**
+
+When local cell values change, `onCellsChange(changes)` receives an array:
+
+```js
+{
+  baseIndex: 12,
+  colIndex: 2,
+  column: { key: "total", label: "Total" },
+  row: ["TXN-000012", "Ada", "199.95"],
+  oldValue: "189.95",
+  value: "199.95"
+}
+```
 
 ## `setConditionalFormat(colIndex, formatSpec)`
 

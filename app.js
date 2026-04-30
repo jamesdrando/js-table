@@ -11,6 +11,7 @@
  * - setColumnFilter(index, filterSpec)
  * - clearColumnFilters()
  * - setCellClass(fn)
+ * - setEditable(boolean)
  * - setConditionalFormat(index, formatSpec)
  * - setConditionalFormats(formatSpecs)
  * - clearConditionalFormats(index?)
@@ -18,10 +19,19 @@
  * - clearSort()
  * - setChunkMode({ columns, totalRows, chunkSize, onChunkRequest?, fetchChunk? })
  * - setChunkRows(startIndex, rows, totalRows?)
- * - setChunkRowCount(totalRows)
- * - clearChunkCache()
- * - getOffsets()
- * - destroy()
+    * - setChunkRowCount(totalRows)
+    * - clearChunkCache()
+    * - getOffsets()
+     * - undo()
+     * - redo()
+    * - destroy()
+ *
+ * Local editing:
+ * - options.editable enables local-cell editing in local mode only
+ * - Read/Edit mode controls whether editing is currently active
+ * - options.paste enables TSV paste into local cells when editable, default true
+ * - options.deleteSelection enables Delete/Backspace clearing when editable, default true
+ * - options.onCellsChange(changes) is called after local cell values change
  */
 class VirtualGridTable {
   static DEFAULT_OPTIONS = {
@@ -36,8 +46,13 @@ class VirtualGridTable {
     onChunkRequest: null,
     fetchChunk: null,
     cellClass: null,
+    editable: false,
+    paste: true,
+    deleteSelection: true,
+    onCellsChange: null,
     demo_mode: false,
     demo_rows: 10000,
+    historyLimit: 20,
   };
 
   constructor(containerId, options = {}) {
@@ -69,6 +84,7 @@ class VirtualGridTable {
     this._sort = null;
     this._columnFilters = new Map();
     this._cellClass = typeof this._opts.cellClass === "function" ? this._opts.cellClass : null;
+    this._onCellsChange = typeof this._opts.onCellsChange === "function" ? this._opts.onCellsChange : null;
     this._conditionalFormats = [];
     this._conditionalFormatCols = new Map();
     this._filterMenuCol = -1;
@@ -100,6 +116,11 @@ class VirtualGridTable {
     this._touchMoveThreshold = 9;
     this._mobileCopyResetTimer = 0;
     this._pointerSelecting = false;
+    this._activeEdit = null;
+    this._editMode = false;
+    this._undoStack = [];
+    this._redoStack = [];
+    this._undoHistoryLimit = this._clamp(Number(this._opts.historyLimit) || 20, 1, 2000);
 
     this._build();
     this._measure();
@@ -113,7 +134,16 @@ class VirtualGridTable {
     this._renderOverlay();
   }
 
+  undo() {
+    return this._undo();
+  }
+
+  redo() {
+    return this._redo();
+  }
+
   setData(data) {
+    this._commitActiveEdit({ rerender: false });
     const { columns, rows } = this._normalizeData(data);
     this._mode = "local";
     this._columns = columns;
@@ -203,6 +233,20 @@ class VirtualGridTable {
     this._renderBody();
   }
 
+  setEditable(isEditable) {
+    const nextEditable = Boolean(isEditable);
+    if (!nextEditable) {
+      this._commitActiveEdit({ rerender: false });
+      this._setEditMode(false);
+    }
+    this._opts.editable = Boolean(isEditable);
+    if (this._editModeBtn) {
+      this._editModeBtn.disabled = !nextEditable;
+      this._refreshEditModeToggle();
+    }
+    this._renderBody();
+  }
+
   setConditionalFormat(colIndex, formatSpec) {
     const abs = colIndex | 0;
     if (abs < 0 || abs >= this._columns.length) return;
@@ -246,6 +290,7 @@ class VirtualGridTable {
   }
 
   setChunkMode(config = {}) {
+    this._commitActiveEdit({ rerender: false });
     const next = config && typeof config === "object" ? config : {};
     if (typeof next.chunkSize === "number" && Number.isFinite(next.chunkSize)) {
       this._chunkSize = this._clamp(Math.floor(next.chunkSize), 25, 5000);
@@ -332,6 +377,7 @@ class VirtualGridTable {
   }
 
   destroy() {
+    this._commitActiveEdit({ rerender: false });
     this._ro?.disconnect();
     this._cancelActivePointerGesture();
     this._closeFilterMenu();
@@ -394,6 +440,8 @@ class VirtualGridTable {
     this._scrollXPx = 0;
     this._scrollPx = 0;
     this._sort = null;
+    this._undoStack.length = 0;
+    this._redoStack.length = 0;
     this._clearSelection(false);
   }
 
@@ -565,7 +613,14 @@ class VirtualGridTable {
       this.setSearch("");
     });
 
-    searchWrap.append(searchSel, searchInp, clearBtn);
+    const editModeBtn = this._createButton("vgt__pill vgt__editModeToggle", "Edit", () => {
+      this._toggleEditMode();
+    });
+    editModeBtn.disabled = !this._opts.editable;
+    this._editModeBtn = editModeBtn;
+    this._refreshEditModeToggle();
+
+    searchWrap.append(searchSel, searchInp, clearBtn, editModeBtn);
 
     const pager = document.createElement("div");
     pager.className = "vgt__pager";
@@ -832,11 +887,80 @@ class VirtualGridTable {
 
     this._root.addEventListener("keydown", (event) => {
       const k = event.key;
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && k.toLowerCase() === "c") {
-        if (this._hasSelection() && !this._isEditableTarget(event.target)) {
-          event.preventDefault();
-          this._copySelectionToClipboard();
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        const lowered = k.toLowerCase();
+        if (lowered === "c") {
+          if (this._hasSelection() && !this._isEditableTarget(event.target)) {
+            event.preventDefault();
+            this._copySelectionToClipboard();
+          }
+          return;
         }
+
+        if (lowered === "z") {
+          if (!this._isEditableTarget(event.target)) {
+            event.preventDefault();
+            if (event.shiftKey) {
+              this._redo();
+            } else {
+              this._undo();
+            }
+          }
+          return;
+        }
+
+        if (lowered === "y") {
+          if (!this._isEditableTarget(event.target)) {
+            event.preventDefault();
+            this._redo();
+          }
+          return;
+        }
+      }
+
+      const isEnter = k === "Enter" || k === "NumpadEnter";
+      const isTab = k === "Tab";
+
+      if (this._activeEdit && (isEnter || isTab)) {
+        event.preventDefault();
+        this._commitActiveEdit({ rerender: false, preserveSelection: true });
+        this._moveSelectionByNavigationKey(isEnter ? "Enter" : "Tab", event.shiftKey);
+        this._focusRootNextTick();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      if (this._isEditableTarget(event.target)) return;
+
+      if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+        const printable = k.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+        if (printable) {
+          const cell = this._selectionAnchorCell();
+          if (cell) {
+            event.preventDefault();
+            this._beginCellEdit(cell, k, { selectionRange: this._selectionRange });
+          }
+          return;
+        }
+      }
+
+      if (isEnter || isTab) {
+        this._moveSelectionByNavigationKey(isEnter ? "Enter" : "Tab", event.shiftKey);
+        event.preventDefault();
+        this._focusRootNextTick();
+        return;
+      }
+
+      if (this._canEditCells() && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if ((k === "Delete" || k === "Backspace") && this._opts.deleteSelection !== false && this._hasSelection()) {
+          event.preventDefault();
+          this._clearSelectedLocalCells();
+          return;
+        }
+      }
+
+      if (this._hasSelection() && this._moveSelectionByArrows(k)) {
+        event.preventDefault();
         return;
       }
       if (k === "PageDown") {
@@ -877,7 +1001,7 @@ class VirtualGridTable {
           this._closeContextMenu();
         }
       }
-    });
+    }, true);
 
     this._thumb.addEventListener("pointerdown", (event) => this._thumbDragStart(event));
     this._track.addEventListener("pointerdown", (event) => {
@@ -899,8 +1023,10 @@ class VirtualGridTable {
       this._selectAllCells();
     });
     this._rowsHost.addEventListener("pointerdown", (event) => this._rowsPointerStart(event));
+    this._rowsHost.addEventListener("dblclick", (event) => this._rowsDoubleClick(event));
     this._rowBumpers.addEventListener("pointerdown", (event) => this._rowBumperPointerStart(event));
     this._root.addEventListener("copy", (event) => this._onCopy(event));
+    this._root.addEventListener("paste", (event) => this._onPaste(event));
     this._root.addEventListener("contextmenu", (event) => this._onContextMenu(event));
     this._boundWindowPointerDown = (event) => this._windowPointerDown(event);
     window.addEventListener("pointerdown", this._boundWindowPointerDown, true);
@@ -1669,6 +1795,7 @@ class VirtualGridTable {
   }
 
   _renderBody() {
+    if (this._activeEdit) this._commitActiveEdit({ rerender: false });
     this._ensureColWidths();
     const rowHeight = this._opts.rowHeight;
     const slots = Math.max(1, this._columns.length);
@@ -2031,6 +2158,9 @@ class VirtualGridTable {
 
   _rowsPointerStart(event) {
     if (event.button !== 0 && event.button !== -1) return;
+    if (event.detail > 1) return;
+    if (this._activeEdit && this._activeEdit.input?.contains(event.target)) return;
+    if (this._activeEdit) this._commitActiveEdit({ rerender: true });
     if (this._activePointerGesture) this._cancelActivePointerGesture();
     const startCell = this._cellFromEvent(event);
     if (this._isTouchDragEvent(event)) {
@@ -2044,6 +2174,14 @@ class VirtualGridTable {
     }
     event.preventDefault();
     this._startSelectionDrag(event, startCell);
+  }
+
+  _rowsDoubleClick(event) {
+    if (!this._canEditCells()) return;
+    const cell = this._cellFromEvent(event);
+    if (!cell) return;
+    event.preventDefault();
+    this._beginCellEdit(cell);
   }
 
   _headerPointerStart(event, headerCell) {
@@ -2498,7 +2636,12 @@ class VirtualGridTable {
 
   _cellFromEvent(event) {
     const target = event.target;
-    if (!(target instanceof Element)) return null;
+    if (!(target instanceof Element)) {
+      if (target instanceof Node && target.parentElement instanceof Element) {
+        return this._cellFromElement(target.parentElement);
+      }
+      return null;
+    }
     return this._cellFromElement(target);
   }
 
@@ -2643,6 +2786,124 @@ class VirtualGridTable {
     });
   }
 
+  _moveSelectionByArrows(k) {
+    const range = this._selectionRange;
+    if (!range) return false;
+
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (rowCount <= 0 || colCount <= 0) return false;
+
+    const firstRow = 0;
+    const lastRow = rowCount - 1;
+    const firstCol = 0;
+    const lastCol = colCount - 1;
+
+    const anchor = this._selectionAnchorCell();
+    if (!anchor) return false;
+
+    const isWholeColumn = range.colMin === range.colMax && range.rowMin === firstRow && range.rowMax === lastRow;
+    const isWholeRow = range.rowMin === range.rowMax && range.colMin === firstCol && range.colMax === lastCol;
+
+    let next = null;
+
+    if (k === "ArrowLeft") {
+      if (isWholeColumn) {
+        const nextCol = this._clamp(range.colMin - 1, firstCol, lastCol);
+        if (nextCol !== range.colMin) {
+          next = { rowMin: firstRow, rowMax: lastRow, colMin: nextCol, colMax: nextCol };
+        }
+      } else {
+        const nextCol = this._clamp(anchor.col - 1, firstCol, lastCol);
+        if (nextCol !== anchor.col) {
+          next = { rowMin: anchor.row, rowMax: anchor.row, colMin: nextCol, colMax: nextCol };
+        }
+      }
+    } else if (k === "ArrowRight") {
+      if (isWholeColumn) {
+        const nextCol = this._clamp(range.colMin + 1, firstCol, lastCol);
+        if (nextCol !== range.colMin) {
+          next = { rowMin: firstRow, rowMax: lastRow, colMin: nextCol, colMax: nextCol };
+        }
+      } else {
+        const nextCol = this._clamp(anchor.col + 1, firstCol, lastCol);
+        if (nextCol !== anchor.col) {
+          next = { rowMin: anchor.row, rowMax: anchor.row, colMin: nextCol, colMax: nextCol };
+        }
+      }
+    } else if (k === "ArrowUp") {
+      if (isWholeRow) {
+        const nextRow = this._clamp(range.rowMin - 1, firstRow, lastRow);
+        if (nextRow !== range.rowMin) {
+          next = { rowMin: nextRow, rowMax: nextRow, colMin: firstCol, colMax: lastCol };
+        }
+      } else {
+        const nextRow = this._clamp(anchor.row - 1, firstRow, lastRow);
+        if (nextRow !== anchor.row) {
+          next = { rowMin: nextRow, rowMax: nextRow, colMin: anchor.col, colMax: anchor.col };
+        }
+      }
+    } else if (k === "ArrowDown") {
+      if (isWholeRow) {
+        const nextRow = this._clamp(range.rowMin + 1, firstRow, lastRow);
+        if (nextRow !== range.rowMin) {
+          next = { rowMin: nextRow, rowMax: nextRow, colMin: firstCol, colMax: lastCol };
+        }
+      } else {
+        const nextRow = this._clamp(anchor.row + 1, firstRow, lastRow);
+        if (nextRow !== anchor.row) {
+          next = { rowMin: nextRow, rowMax: nextRow, colMin: anchor.col, colMax: anchor.col };
+        }
+      }
+    }
+
+    if (!next) return false;
+
+    this._applySelectionRange(next, { focusRoot: true });
+    this._scrollSelectionIntoView(next.rowMin, next.colMin);
+    return true;
+  }
+
+  _moveSelectionByNavigationKey(key, shiftKey = false) {
+    if (key === "Tab") {
+      return this._moveSelectionByArrows("ArrowRight");
+    }
+    if (key === "Enter") {
+      return this._moveSelectionByArrows("ArrowDown");
+    }
+    return false;
+  }
+
+  _scrollSelectionIntoView(viewRow, colIndex) {
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    const firstCol = 0;
+    if (rowCount <= 0 || colCount <= 0) return;
+    this._ensureColWidths();
+
+    const rowTop = viewRow * this._opts.rowHeight;
+    const rowBottom = rowTop + this._opts.rowHeight;
+    if (rowTop < this._scrollPx) {
+      this._setScrollPx(rowTop);
+    } else if (rowBottom > this._scrollPx + this._bodyH) {
+      this._setScrollPx(rowBottom - this._bodyH);
+    }
+
+    let left = 0;
+    const targetCol = this._clamp(colIndex | 0, firstCol, colCount - 1);
+    for (let c = 0; c < targetCol; c += 1) {
+      left += Math.max(this._minColWidth, this._colWidths[c] ?? this._minColWidth);
+    }
+    const width = Math.max(this._minColWidth, this._colWidths[targetCol] ?? this._minColWidth);
+    const right = left + width;
+
+    if (left < this._scrollXPx) {
+      this._setScrollXPx(left);
+    } else if (right > this._scrollXPx + this._bodyW) {
+      this._setScrollXPx(right - this._bodyW);
+    }
+  }
+
   _applySelectionRange(range, options = {}) {
     this._selectionRange = range;
     if (options.focusRoot) this._root.focus({ preventScroll: true });
@@ -2762,6 +3023,514 @@ class VirtualGridTable {
       tag === "SELECT" ||
       Boolean(target.closest("[contenteditable]"))
     );
+  }
+
+  _focusRoot() {
+    if (!this._root) return;
+    try {
+      this._root.focus({ preventScroll: true });
+      return;
+    } catch (error) {
+      try {
+        this._root.focus();
+      } catch (error2) {
+        void error2;
+      }
+    }
+  }
+
+  _focusRootNextTick() {
+    this._focusRoot();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        if (document?.activeElement !== this._root) this._focusRoot();
+      });
+    } else {
+      setTimeout(() => {
+        if (document?.activeElement !== this._root) this._focusRoot();
+      }, 0);
+    }
+  }
+
+  _canEditCells() {
+    return this._opts.editable === true && this._editMode === true && this._mode === "local" && this._columns.length > 0;
+  }
+
+  _selectionAnchorCell() {
+    const range = this._selectionRange;
+    if (!range) return null;
+    return { row: range.rowMin, col: range.colMin };
+  }
+
+  _forEachSelectedVisibleCell(range, callback) {
+    const normalized = this._normalizedSelectionRange(range);
+    if (!normalized || !this._rowEls) return;
+    const { rowMin, rowMax, colMin, colMax } = normalized;
+    for (let slotIndex = 0; slotIndex < this._rowEls.length; slotIndex += 1) {
+      const slot = this._rowEls[slotIndex];
+      const viewRow = Number(slot.rowEl.dataset.viewRow);
+      if (!Number.isFinite(viewRow) || viewRow < rowMin || viewRow > rowMax) continue;
+
+      for (let colIndex = colMin; colIndex <= colMax; colIndex += 1) {
+        const cellEl = slot.cellEls[colIndex];
+        if (!cellEl) continue;
+        callback(cellEl, viewRow, colIndex);
+      }
+    }
+  }
+
+  _applySelectionDraft(range, draftText) {
+    const text = draftText == null ? "" : String(draftText);
+    this._forEachSelectedVisibleCell(range, (cellEl) => {
+      if (cellEl.classList.contains("vgt__cell--editing")) return;
+      cellEl.textContent = text;
+      cellEl.classList.add("vgt__cell--multiEditing");
+    });
+  }
+
+  _clearSelectionDraft(range) {
+    this._forEachSelectedVisibleCell(range, (cellEl) => {
+      cellEl.classList.remove("vgt__cell--multiEditing");
+    });
+  }
+
+  _syncSelectionFromData(range) {
+    if (this._mode !== "local") return;
+    this._forEachSelectedVisibleCell(range, (cellEl, viewRow, colIndex) => {
+      const baseIndex = this._viewIndexToBase(viewRow);
+      if (baseIndex < 0) return;
+      const value = this._rows[baseIndex]?.[colIndex];
+      cellEl.textContent = value == null ? "" : String(value);
+    });
+  }
+
+  _removeActiveEditInput(edit) {
+    if (!edit?.input) return;
+    const input = edit.input;
+    const parent = input.closest(".vgt__cell");
+    if (parent) parent.classList.remove("vgt__cell--editing");
+    input.remove();
+  }
+
+  _setEditMode(isEditMode) {
+    const next = this._opts.editable === true && Boolean(isEditMode);
+    if (next === this._editMode) {
+      if (this._editModeBtn) this._editModeBtn.disabled = !this._opts.editable;
+      this._refreshEditModeToggle();
+      return;
+    }
+
+    if (!next && this._activeEdit) {
+      this._commitActiveEdit({ rerender: false });
+    }
+
+    this._editMode = next;
+    if (!this._opts.editable) this._editMode = false;
+    if (this._editModeBtn) {
+      this._editModeBtn.disabled = !this._opts.editable;
+      this._refreshEditModeToggle();
+    }
+  }
+
+  _refreshEditModeToggle() {
+    if (!this._editModeBtn) return;
+    if (!this._opts.editable) {
+      this._editModeBtn.textContent = "Read";
+      this._editModeBtn.dataset.mode = "read";
+      return;
+    }
+
+    if (this._editMode) {
+      this._editModeBtn.textContent = "Edit";
+      this._editModeBtn.dataset.mode = "edit";
+      return;
+    }
+
+    this._editModeBtn.textContent = "Read";
+    this._editModeBtn.dataset.mode = "read";
+  }
+
+  _toggleEditMode() {
+    this._setEditMode(!this._editMode);
+  }
+
+  _normalizedSelectionRange(range) {
+    if (!range) return null;
+    const rowCount = this._viewCount | 0;
+    const colCount = this._columns.length | 0;
+    if (rowCount <= 0 || colCount <= 0) return null;
+
+    const rowMin = this._clamp(range.rowMin | 0, 0, rowCount - 1);
+    const rowMax = this._clamp(range.rowMax | 0, 0, rowCount - 1);
+    const colMin = this._clamp(range.colMin | 0, 0, colCount - 1);
+    const colMax = this._clamp(range.colMax | 0, 0, colCount - 1);
+    if (rowMin > rowMax || colMin > colMax) return null;
+
+    return {
+      rowMin,
+      rowMax,
+      colMin,
+      colMax,
+    };
+  }
+
+  _cellElementForViewCell(viewRow, colIndex) {
+    if (!this._rowEls) return null;
+    for (let i = 0; i < this._rowEls.length; i += 1) {
+      const slot = this._rowEls[i];
+      if (Number(slot.rowEl.dataset.viewRow) === viewRow) return slot.cellEls[colIndex] ?? null;
+    }
+    return null;
+  }
+
+  _beginCellEdit(cell, initialText = null, options = {}) {
+    if (!this._canEditCells()) return false;
+    if (!cell) return false;
+
+    const anchor = {
+      row: cell?.row | 0,
+      col: cell?.col | 0,
+    };
+    const baseSelection = this._normalizedSelectionRange(options.selectionRange);
+    const editSelection = baseSelection || {
+      rowMin: anchor.row,
+      rowMax: anchor.row,
+      colMin: anchor.col,
+      colMax: anchor.col,
+    };
+    const isMultiEdit = editSelection.rowMin !== editSelection.rowMax || editSelection.colMin !== editSelection.colMax;
+
+    const viewRow = this._clamp(editSelection.rowMin, 0, this._viewCount - 1);
+    const colIndex = this._clamp(editSelection.colMin, 0, Math.max(0, this._columns.length - 1));
+    const baseIndex = this._viewIndexToBase(viewRow);
+    if (baseIndex < 0 || colIndex < 0) return false;
+
+    this._commitActiveEdit({ rerender: false });
+    const cellEl = this._cellElementForViewCell(viewRow, colIndex);
+    if (!cellEl) return false;
+
+    this._applySelectionRange(editSelection);
+
+    const oldValue = this._rows[baseIndex]?.[colIndex];
+    const input = document.createElement("input");
+    input.className = "vgt__cellEditor";
+    input.type = "text";
+    if (initialText != null) {
+      input.value = String(initialText);
+    } else {
+      input.value = oldValue == null ? "" : String(oldValue);
+    }
+    input.setAttribute("aria-label", "Edit cell");
+
+    const edit = {
+      input,
+      viewRow,
+      colIndex,
+      selectionRange: editSelection,
+      oldValue,
+      isMultiEdit,
+    };
+    this._activeEdit = edit;
+    if (isMultiEdit) this._applySelectionDraft(editSelection, input.value);
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === "NumpadEnter") {
+        event.preventDefault();
+        this._commitActiveEdit({ rerender: false, preserveSelection: true });
+        this._moveSelectionByNavigationKey("Enter", false);
+        this._focusRootNextTick();
+        return;
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this._cancelActiveEdit({ rerender: true });
+        this._focusRootNextTick();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        this._commitActiveEdit({ rerender: false, preserveSelection: true });
+        this._moveSelectionByNavigationKey("Tab", event.shiftKey);
+        this._focusRootNextTick();
+      }
+    });
+    input.addEventListener("blur", () => {
+      if (this._activeEdit === edit) this._commitActiveEdit({ rerender: true });
+    });
+
+    input.addEventListener("input", () => {
+      if (this._activeEdit === edit && edit.isMultiEdit) {
+        this._applySelectionDraft(edit.selectionRange, input.value);
+      }
+    });
+
+    cellEl.classList.add("vgt__cell--editing");
+    cellEl.textContent = "";
+    cellEl.append(input);
+    input.focus({ preventScroll: true });
+    if (initialText == null) {
+      input.select();
+    } else {
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    }
+    return true;
+  }
+
+  _commitActiveEdit(options = {}) {
+    const edit = this._activeEdit;
+    if (!edit) return false;
+    this._removeActiveEditInput(edit);
+    this._clearSelectionDraft(edit.selectionRange);
+    this._activeEdit = null;
+    const changes = [];
+    const nextValue = edit.input ? edit.input.value : "";
+    const range = this._normalizedSelectionRange(edit.selectionRange);
+
+    if (range && this._mode === "local") {
+      for (let viewRow = range.rowMin; viewRow <= range.rowMax; viewRow += 1) {
+        const baseIndex = this._viewIndexToBase(viewRow);
+        if (baseIndex < 0) continue;
+        for (let colIndex = range.colMin; colIndex <= range.colMax; colIndex += 1) {
+          this._queueLocalCellChange(changes, baseIndex, colIndex, nextValue);
+        }
+      }
+    }
+
+    if (changes.length > 0) {
+      this._applyLocalCellChanges(changes, {
+        rerender: options.rerender !== false,
+        preserveSelection: options.preserveSelection === true,
+      });
+      if (options.rerender === false) this._syncSelectionFromData(range);
+      return true;
+    }
+
+    if (options.rerender === false) this._syncSelectionFromData(range);
+    else this._renderBody();
+    return false;
+  }
+
+  _cancelActiveEdit(options = {}) {
+    if (!this._activeEdit) return;
+    const edit = this._activeEdit;
+    this._removeActiveEditInput(edit);
+    this._clearSelectionDraft(edit.selectionRange);
+    this._activeEdit = null;
+    if (options.rerender === false) {
+      this._syncSelectionFromData(edit.selectionRange);
+    } else {
+      this._renderBody();
+    }
+  }
+
+  _onPaste(event) {
+    if (!this._canEditCells() || this._opts.paste === false || this._isEditableTarget(event.target)) return;
+    const text = event.clipboardData?.getData("text/plain") ?? "";
+    if (!text) return;
+    const startCell = this._selectionAnchorCell();
+    if (!startCell) return;
+    const matrix = this._parseClipboardMatrix(text);
+    if (matrix.length === 0) return;
+
+    event.preventDefault();
+    this._pasteLocalCells(startCell, matrix);
+  }
+
+  _parseClipboardMatrix(text) {
+    const normalized = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = normalized.split("\n");
+    if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+    return lines.map((line) => line.split("\t"));
+  }
+
+  _pasteLocalCells(startCell, matrix) {
+    const range = this._selectionRange;
+    const changes = [];
+    const fillSelection =
+      matrix.length === 1 &&
+      matrix[0].length === 1 &&
+      range &&
+      (range.rowMax > range.rowMin || range.colMax > range.colMin);
+
+    if (fillSelection) {
+      const value = matrix[0][0];
+      for (let viewRow = range.rowMin; viewRow <= range.rowMax; viewRow += 1) {
+        const baseIndex = this._viewIndexToBase(viewRow);
+        if (baseIndex < 0) continue;
+        for (let col = range.colMin; col <= range.colMax; col += 1) {
+          this._queueLocalCellChange(changes, baseIndex, col, value);
+        }
+      }
+    } else {
+      for (let r = 0; r < matrix.length; r += 1) {
+        const viewRow = startCell.row + r;
+        if (viewRow >= this._viewCount) break;
+        const baseIndex = this._viewIndexToBase(viewRow);
+        if (baseIndex < 0) continue;
+        for (let c = 0; c < matrix[r].length; c += 1) {
+          const colIndex = startCell.col + c;
+          if (colIndex >= this._columns.length) break;
+          this._queueLocalCellChange(changes, baseIndex, colIndex, matrix[r][c]);
+        }
+      }
+    }
+
+    this._applyLocalCellChanges(changes, { rerender: true });
+  }
+
+  _clearSelectedLocalCells() {
+    if (!this._canEditCells() || !this._selectionRange) return;
+    this._commitActiveEdit({ rerender: false });
+    const { rowMin, rowMax, colMin, colMax } = this._selectionRange;
+    const changes = [];
+    for (let viewRow = rowMin; viewRow <= rowMax; viewRow += 1) {
+      const baseIndex = this._viewIndexToBase(viewRow);
+      if (baseIndex < 0) continue;
+      for (let col = colMin; col <= colMax; col += 1) {
+        this._queueLocalCellChange(changes, baseIndex, col, "");
+      }
+    }
+    this._applyLocalCellChanges(changes, { rerender: true });
+  }
+
+  _queueLocalCellChange(changes, baseIndex, colIndex, value) {
+    if (baseIndex < 0 || baseIndex >= this._rows.length || colIndex < 0 || colIndex >= this._columns.length) return;
+    const row = this._rows[baseIndex] || [];
+    const oldValue = row[colIndex];
+    if ((oldValue == null ? "" : String(oldValue)) === String(value ?? "")) return;
+    changes.push({ baseIndex, colIndex, oldValue, value: value ?? "" });
+  }
+
+  _recordHistoryEntry(changes) {
+    if (!Array.isArray(changes) || changes.length === 0) return;
+
+    const snapshot = new Array(changes.length);
+    for (let i = 0; i < changes.length; i += 1) {
+      const change = changes[i];
+      snapshot[i] = {
+        baseIndex: change.baseIndex,
+        colIndex: change.colIndex,
+        oldValue: change.oldValue,
+        value: change.value,
+      };
+    }
+
+    this._undoStack.push(snapshot);
+    if (this._undoStack.length > this._undoHistoryLimit) this._undoStack.shift();
+    this._redoStack.length = 0;
+  }
+
+  _applyCellChangesWithResolver(changes, valueResolver, options = {}) {
+    if (this._mode !== "local" || !Array.isArray(changes) || changes.length === 0) return [];
+
+    const touchedRows = new Set();
+    const applied = [];
+
+    for (let i = 0; i < changes.length; i += 1) {
+      const change = changes[i];
+      if (!change) continue;
+      const baseIndex = change.baseIndex | 0;
+      const colIndex = change.colIndex | 0;
+      if (baseIndex < 0 || baseIndex >= this._rows.length || colIndex < 0 || colIndex >= this._columns.length) continue;
+
+      const row = this._rows[baseIndex];
+      if (!row) continue;
+
+      const nextValue = valueResolver(change);
+      const prevValue = row[colIndex];
+      if (Object.is(prevValue, nextValue)) continue;
+
+      row[colIndex] = nextValue;
+      touchedRows.add(baseIndex);
+      applied.push({
+        baseIndex,
+        colIndex,
+        oldValue: prevValue,
+        value: nextValue,
+      });
+    }
+
+    if (applied.length === 0) return [];
+
+    this._invalidateLocalRowCaches(touchedRows);
+    this._autoColWidths = this._computeAutoColumnWidthsFromLocalData();
+    if (this._hasLocalQueryState() && options.preserveSelection !== true) this._clearSelection(false);
+    this._recomputeView();
+    this._clampScroll();
+    if (options.rerender !== false) this._renderAll();
+    if (options.notify !== false) this._notifyCellsChange(applied);
+
+    return applied;
+  }
+
+  _applyHistoryEntry(entry, direction, options = {}) {
+    return this._applyCellChangesWithResolver(entry, (change) => {
+      return direction === "undo" ? change.oldValue : change.value;
+    }, options);
+  }
+
+  _undo() {
+    if (this._undoStack.length === 0) return false;
+    if (this._activeEdit) this._commitActiveEdit({ rerender: false });
+
+    const entry = this._undoStack.pop();
+    const applied = this._applyHistoryEntry(entry, "undo", { rerender: true, notify: true });
+    if (applied.length === 0) return false;
+
+    this._redoStack.push(entry);
+    if (this._redoStack.length > this._undoHistoryLimit) this._redoStack.shift();
+    return true;
+  }
+
+  _redo() {
+    if (this._redoStack.length === 0) return false;
+    if (this._activeEdit) this._commitActiveEdit({ rerender: false });
+
+    const entry = this._redoStack.pop();
+    const applied = this._applyHistoryEntry(entry, "redo", { rerender: true, notify: true });
+    if (applied.length === 0) return false;
+
+    this._undoStack.push(entry);
+    if (this._undoStack.length > this._undoHistoryLimit) this._undoStack.shift();
+    return true;
+  }
+
+  _applyLocalCellChanges(changes, options = {}) {
+    const applied = this._applyCellChangesWithResolver(changes, (change) => change.value, {
+      rerender: options.rerender !== false,
+      notify: true,
+      preserveSelection: options.preserveSelection === true,
+    });
+    if (applied.length === 0) return false;
+
+    if (options.skipHistory !== true) this._recordHistoryEntry(applied);
+    return true;
+  }
+
+  _invalidateLocalRowCaches(rowIndexes) {
+    for (const baseIndex of rowIndexes) {
+      this._searchCache[baseIndex] = null;
+      this._searchColCache[baseIndex] = null;
+    }
+  }
+
+  _hasLocalQueryState() {
+    return Boolean(this._filter || this._searchQuery || this._sort || this._columnFilters.size > 0);
+  }
+
+  _notifyCellsChange(changes) {
+    if (!this._onCellsChange) return;
+    const payload = changes.map((change) => ({
+      baseIndex: change.baseIndex,
+      colIndex: change.colIndex,
+      column: this._columns[change.colIndex],
+      row: this._rows[change.baseIndex],
+      oldValue: change.oldValue,
+      value: change.value,
+    }));
+    try {
+      this._onCellsChange(payload);
+    } catch (err) {
+      console.error("VirtualGridTable onCellsChange failed", err);
+    }
   }
 
   _onCopy(event) {
@@ -3311,6 +4080,7 @@ const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
   visibleCols: 6,
   overscan: 2,
+  editable: true,
   demo_mode: true,
   demo_rows: 50000,
 });

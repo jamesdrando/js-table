@@ -71,6 +71,14 @@ Chunk requests include the current search text, search column, sort state, and s
 
 Clipboard export supports both TSV text and HTML tables. When the entire table is selected, header labels are included by default.
 
+## Local editing model
+
+Editing is available only when `options.editable` is enabled, the table is in local mode, and `Read/Edit` mode is set to `Edit`. The grid keeps one active input editor at a time; commits write through to `_rows` by base row index and column index, then invalidates search caches and recomputes the local view.
+
+Paste uses the browser clipboard's plain-text payload as Excel-style tab/newline data. A single pasted value fills the current selection; a rectangular pasted range writes from the selection's top-left cell and is clamped to existing row and column bounds. `Delete` and `Backspace` clear selected local cells to empty strings.
+
+Chunked mode does not accept edits, paste, or delete operations because the grid does not own the full remote dataset.
+
 ## Column sizing
 
 - Explicit `column.width` wins

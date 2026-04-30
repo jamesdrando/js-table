@@ -406,6 +406,28 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255, 118, 163, 0.52);
 }
 
+.vgt__cell.vgt__cell--editing {
+  padding: 0;
+  background: #050506;
+  box-shadow: inset 0 0 0 2px var(--theme-focus);
+}
+
+.vgt__cell.vgt__cell--multiEditing {
+  background: rgba(255, 47, 109, 0.12);
+}
+
+.vgt__cellEditor {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0 var(--vgt-pad-x);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
 .vgt__cell:last-child {
   border-right: 0;
 }
@@ -751,6 +773,22 @@ body {
 .vgt__pill:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.vgt__editModeToggle {
+  min-width: 74px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.vgt__editModeToggle[data-mode="read"] {
+  opacity: 0.75;
+}
+
+.vgt__editModeToggle[data-mode="edit"] {
+  background: linear-gradient(180deg, #ff2b75, #d61b5d);
+  color: #fff6fb;
+  border-color: #ff5b95;
 }
 
 .vgt__searchWrap {
