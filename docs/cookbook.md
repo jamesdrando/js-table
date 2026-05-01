@@ -112,7 +112,9 @@ grid.setChunkMode({
 
 ```js
 window.setAppTheme("light");
-window.setAppTheme("dark");
+window.setAppTheme("chrome-dark");
+window.setAppTheme("warm");
+window.setAppTheme("aurora");
 ```
 
 ## Recipe: read scroll offsets

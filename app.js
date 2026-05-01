@@ -382,6 +382,7 @@ class VirtualGridTable {
     this._cancelActivePointerGesture();
     this._closeFilterMenu();
     this._closeContextMenu();
+    this._closeThemeMenu();
     if (this._mobileCopyResetTimer) {
       window.clearTimeout(this._mobileCopyResetTimer);
       this._mobileCopyResetTimer = 0;
@@ -620,7 +621,52 @@ class VirtualGridTable {
     this._editModeBtn = editModeBtn;
     this._refreshEditModeToggle();
 
-    searchWrap.append(searchSel, searchInp, clearBtn, editModeBtn);
+    const themeControl = document.createElement("div");
+    themeControl.className = "vgt__themeControl";
+
+    const themeBtn = document.createElement("button");
+    themeBtn.className = "vgt__pill vgt__themeToggle";
+    themeBtn.type = "button";
+    themeBtn.title = "Theme";
+    themeBtn.setAttribute("aria-label", "Theme options");
+    themeBtn.setAttribute("aria-expanded", "false");
+    themeBtn.append(this._paintPaletteIcon());
+    this._themeToggle = themeBtn;
+
+    const themeMenu = document.createElement("div");
+    themeMenu.className = "vgt__themeMenu";
+    themeMenu.dataset.open = "0";
+    this._themeMenu = themeMenu;
+    this._themeMenuItems = [];
+
+    const currentThemeItem = this._createButton("vgt__themeMenuItem vgt__themeMenuItem--current", "Current", () => {
+      this._applyTheme(this._readThemeMode());
+      this._closeThemeMenu();
+    });
+    currentThemeItem.dataset.theme = "current";
+    currentThemeItem.disabled = true;
+    this._currentThemeMenuItem = currentThemeItem;
+    themeMenu.append(currentThemeItem);
+
+    for (let i = 0; i < VGT_THEME_OPTIONS.length; i += 1) {
+      const option = VGT_THEME_OPTIONS[i];
+      const item = this._createButton("vgt__themeMenuItem", option.label, () => {
+        this._applyTheme(option.value);
+        this._closeThemeMenu();
+      });
+      item.dataset.theme = option.value;
+      this._themeMenuItems.push(item);
+      themeMenu.append(item);
+    }
+
+    themeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      this._toggleThemeMenu();
+    });
+    themeControl.append(themeBtn, themeMenu);
+    this._refreshThemeMenuState();
+
+    searchWrap.append(searchSel, searchInp, clearBtn, editModeBtn, themeControl);
 
     const pager = document.createElement("div");
     pager.className = "vgt__pager";
@@ -799,7 +845,7 @@ class VirtualGridTable {
     const formatBg = document.createElement("input");
     formatBg.className = "vgt__formatColorInput";
     formatBg.type = "color";
-    formatBg.value = "#2d0c17";
+    formatBg.value = defaultConditionalFormatColors(this._readThemeMode()).backgroundColor;
     formatBgLabel.append(formatBg);
     this._formatBg = formatBg;
 
@@ -809,7 +855,7 @@ class VirtualGridTable {
     const formatText = document.createElement("input");
     formatText.className = "vgt__formatColorInput";
     formatText.type = "color";
-    formatText.value = "#ffe2ec";
+    formatText.value = defaultConditionalFormatColors(this._readThemeMode()).color;
     formatTextLabel.append(formatText);
     this._formatText = formatText;
 
@@ -1000,6 +1046,10 @@ class VirtualGridTable {
           event.preventDefault();
           this._closeContextMenu();
         }
+        if (this._themeMenu?.dataset.open === "1") {
+          event.preventDefault();
+          this._closeThemeMenu();
+        }
       }
     }, true);
 
@@ -1033,6 +1083,7 @@ class VirtualGridTable {
     this._boundWindowResize = () => {
       this._closeFilterMenu();
       this._closeContextMenu();
+      this._closeThemeMenu();
     };
     window.addEventListener("resize", this._boundWindowResize, { passive: true });
 
@@ -1630,8 +1681,9 @@ class VirtualGridTable {
     this._formatOp.value = existingFormat?.op ?? "like";
     this._formatValueA.value = existingFormat?.value ?? "";
     this._formatValueB.value = existingFormat?.valueTo ?? "";
-    this._formatBg.value = existingFormat?.backgroundColor || "#2d0c17";
-    this._formatText.value = existingFormat?.color || "#ffe2ec";
+    const formatDefaults = defaultConditionalFormatColors(this._readThemeMode());
+    this._formatBg.value = existingFormat?.backgroundColor || formatDefaults.backgroundColor;
+    this._formatText.value = existingFormat?.color || formatDefaults.color;
     this._syncFilterMenuInputs();
 
     this._filterMenu.dataset.open = "1";
@@ -1671,6 +1723,84 @@ class VirtualGridTable {
       this._formatValueB.style.display = isFormatBetween ? "block" : "none";
       this._formatValueB.disabled = !isFormatBetween;
     }
+  }
+
+  _applyTheme(themeMode) {
+    const nextTheme = normalizeThemeMode(themeMode);
+    if (typeof window.setAppTheme === "function") {
+      window.setAppTheme(nextTheme);
+    } else {
+      document.documentElement.setAttribute("data-theme", nextTheme);
+    }
+    this._refreshThemeMenuState();
+  }
+
+  _readThemeMode() {
+    return normalizeThemeMode(document.documentElement.getAttribute("data-theme"));
+  }
+
+  _refreshThemeMenuState() {
+    if (!this._themeMenuItems?.length || !this._themeMenu) return;
+
+    const currentTheme = this._readThemeMode();
+    if (this._currentThemeMenuItem) {
+      const label = this._themeLabel(currentTheme);
+      this._currentThemeMenuItem.textContent = `Current (${label})`;
+    }
+
+    for (let i = 0; i < this._themeMenuItems.length; i += 1) {
+      const item = this._themeMenuItems[i];
+      const isActive = item.dataset.theme === currentTheme;
+      item.dataset.active = isActive ? "1" : "0";
+    }
+  }
+
+  _themeLabel(themeMode) {
+    const mode = normalizeThemeMode(themeMode);
+    for (let i = 0; i < VGT_THEME_OPTIONS.length; i += 1) {
+      if (VGT_THEME_OPTIONS[i].value === mode) return VGT_THEME_OPTIONS[i].label;
+    }
+    return mode;
+  }
+
+  _openThemeMenu() {
+    if (!this._themeMenu) return;
+    this._closeContextMenu();
+    this._closeFilterMenu();
+    this._refreshThemeMenuState();
+    this._themeMenu.dataset.open = "1";
+    if (this._themeToggle) this._themeToggle.setAttribute("aria-expanded", "true");
+  }
+
+  _closeThemeMenu() {
+    if (!this._themeMenu) return;
+    this._themeMenu.dataset.open = "0";
+    if (this._themeToggle) this._themeToggle.setAttribute("aria-expanded", "false");
+  }
+
+  _toggleThemeMenu() {
+    const isOpen = this._themeMenu?.dataset.open === "1";
+    if (isOpen) {
+      this._closeThemeMenu();
+    } else {
+      this._openThemeMenu();
+    }
+  }
+
+  _paintPaletteIcon() {
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "vgt__themeIcon";
+    iconWrap.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M19 9.8a8 8 0 1 1-8-8c.7 0 1.4.1 2 .2a8 8 0 0 1 6 7.8 8 8 0 0 1-1 0Z" />
+        <circle cx="14.5" cy="11.5" r="1.2" />
+        <circle cx="10" cy="9" r="1.2" />
+        <circle cx="7" cy="12.5" r="1.2" />
+        <circle cx="10" cy="15.5" r="1.2" />
+        <circle cx="13.8" cy="14.2" r="1.2" />
+      </svg>
+    `;
+    return iconWrap;
   }
 
   _applyFilterMenu() {
@@ -1764,6 +1894,11 @@ class VirtualGridTable {
     if (!(target instanceof Element)) return;
     if (this._contextMenu?.dataset.open === "1") {
       if (!target.closest(".vgt__ctxMenu")) this._closeContextMenu();
+    }
+    if (this._themeMenu?.dataset.open === "1") {
+      if (!target.closest(".vgt__themeMenu") && !target.closest(".vgt__themeToggle")) {
+        this._closeThemeMenu();
+      }
     }
     if (this._filterMenuCol >= 0) {
       if (!target.closest(".vgt__filterMenu") && !target.closest(".vgt__filterBtn")) {
@@ -3911,8 +4046,52 @@ class VirtualGridTable {
 
 window.VirtualGridTable = VirtualGridTable;
 
+const VGT_THEME_OPTIONS = [
+  { value: "light", label: "Light" },
+  { value: "chrome-dark", label: "Chrome Dark" },
+  { value: "warm", label: "Warm" },
+  { value: "aurora", label: "Aurora" },
+];
+
+const VGT_THEME_VALUES = VGT_THEME_OPTIONS.map((option) => option.value);
+
+function isThemeValue(mode) {
+  return VGT_THEME_VALUES.includes(mode);
+}
+
+function normalizeThemeMode(mode) {
+  if (typeof mode === "string") {
+    const normalized = mode.trim().toLowerCase();
+    if (normalized === "dark") return "chrome-dark";
+    if (isThemeValue(normalized)) return normalized;
+    if (normalized === "current") return normalizeThemeMode(document.documentElement.getAttribute("data-theme"));
+  }
+
+  const current = document.documentElement.getAttribute("data-theme");
+  if (typeof current === "string") {
+    const normalized = current.trim().toLowerCase();
+    if (normalized === "dark") return "chrome-dark";
+    if (isThemeValue(normalized)) return normalized;
+  }
+  return "light";
+}
+
+function defaultConditionalFormatColors(themeMode) {
+  const theme = normalizeThemeMode(themeMode);
+  if (theme === "warm") {
+    return { backgroundColor: "#5a311d", color: "#ffe7d1" };
+  }
+  if (theme === "aurora") {
+    return { backgroundColor: "#14384b", color: "#e8fbff" };
+  }
+  if (theme === "chrome-dark" || theme === "dark") {
+    return { backgroundColor: "#173153", color: "#e6f0ff" };
+  }
+  return { backgroundColor: "#dbe8ff", color: "#183a66" };
+}
+
 window.setAppTheme = function setAppTheme(mode) {
-  const theme = mode === "light" ? "light" : "dark";
+  const theme = normalizeThemeMode(mode);
   document.documentElement.setAttribute("data-theme", theme);
   return theme;
 };

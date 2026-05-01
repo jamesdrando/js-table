@@ -205,6 +205,31 @@ html[data-theme="light"] .vgt__filterMenu {
   box-shadow: 0 16px 34px rgba(228, 0, 82, 0.12);
 }
 
+html[data-theme="light"] .vgt__themeMenu {
+  border-color: #ff7fa9;
+  background: #fff7fa;
+  box-shadow: 0 16px 34px rgba(228, 0, 82, 0.12);
+}
+
+html[data-theme="light"] .vgt__themeMenuItem {
+  color: #35111c;
+}
+
+html[data-theme="light"] .vgt__themeMenuItem:hover {
+  border-color: #ff5b95;
+  background: #ffdce8;
+}
+
+html[data-theme="light"] .vgt__themeMenuItem:focus,
+html[data-theme="light"] .vgt__themeMenuItem[data-active="1"] {
+  background: #ffe2ee;
+  border-color: #ff5b95;
+}
+
+html[data-theme="light"] .vgt__themeMenuItem--current {
+  color: #8b4c62;
+}
+
 html[data-theme="light"] .vgt__filterTitle {
   color: #43111f;
 }

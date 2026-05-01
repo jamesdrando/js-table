@@ -425,8 +425,10 @@ Demo-page helper that sets `document.documentElement.dataset.theme`.
 
 **Parameters**
 
-- `mode` `"dark" | "light"`
+- `mode` `"light" | "dark" | "chrome-dark" | "warm" | "aurora"`
+
+`"dark"` is an alias for `"chrome-dark"`.
 
 **Returns**
 
-- `"dark" | "light"`
+- `"light" | "chrome-dark" | "warm" | "aurora"`
