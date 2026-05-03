@@ -778,8 +778,13 @@ body {
 }
 
 .vgt__editModeToggle {
-  min-width: 74px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 62px;
+  min-height: 29px;
+  padding: 5px 8px;
   font-weight: 600;
 }
 
@@ -791,6 +796,44 @@ body {
   background: linear-gradient(180deg, #ff2b75, #d61b5d);
   color: #fff6fb;
   border-color: #ff5b95;
+}
+
+.vgt__editModeIcon,
+.vgt__editModeSwitch {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.vgt__editModeIcon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vgt__editModeSwitch {
+  width: 26px;
+  height: 14px;
+  align-items: center;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  opacity: 0.82;
+  padding: 1px;
+}
+
+.vgt__editModeSwitch span {
+  width: 10px;
+  height: 10px;
+  background: currentColor;
+  transform: translateX(0);
+  transition: transform 140ms ease;
+}
+
+.vgt__editModeToggle[data-mode="edit"] .vgt__editModeSwitch span {
+  transform: translateX(12px);
 }
 
 .vgt__themeControl {
@@ -952,6 +995,7 @@ body {
 
 .vgt__btn,
 .vgt__sbtn,
+.vgt__pill,
 .vgt__themeMenuItem,
 .vgt__ctxMenuItem,
 .vgt__searchSelect,

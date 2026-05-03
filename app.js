@@ -614,9 +614,10 @@ class VirtualGridTable {
       this.setSearch("");
     });
 
-    const editModeBtn = this._createButton("vgt__pill vgt__editModeToggle", "Edit", () => {
+    const editModeBtn = this._createButton("vgt__pill vgt__editModeToggle", "", () => {
       this._toggleEditMode();
     });
+    editModeBtn.append(this._paintPencilIcon(), this._paintEditSwitch());
     editModeBtn.disabled = !this._opts.editable;
     this._editModeBtn = editModeBtn;
     this._refreshEditModeToggle();
@@ -1801,6 +1802,26 @@ class VirtualGridTable {
       </svg>
     `;
     return iconWrap;
+  }
+
+  _paintPencilIcon() {
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "vgt__editModeIcon";
+    iconWrap.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    `;
+    return iconWrap;
+  }
+
+  _paintEditSwitch() {
+    const switchEl = document.createElement("span");
+    switchEl.className = "vgt__editModeSwitch";
+    switchEl.setAttribute("aria-hidden", "true");
+    switchEl.append(document.createElement("span"));
+    return switchEl;
   }
 
   _applyFilterMenu() {
@@ -3270,19 +3291,22 @@ class VirtualGridTable {
   _refreshEditModeToggle() {
     if (!this._editModeBtn) return;
     if (!this._opts.editable) {
-      this._editModeBtn.textContent = "Read";
       this._editModeBtn.dataset.mode = "read";
+      this._editModeBtn.title = "Editing unavailable";
+      this._editModeBtn.setAttribute("aria-label", "Editing unavailable");
       return;
     }
 
     if (this._editMode) {
-      this._editModeBtn.textContent = "Edit";
       this._editModeBtn.dataset.mode = "edit";
+      this._editModeBtn.title = "Switch to read mode";
+      this._editModeBtn.setAttribute("aria-label", "Switch to read mode");
       return;
     }
 
-    this._editModeBtn.textContent = "Read";
     this._editModeBtn.dataset.mode = "read";
+    this._editModeBtn.title = "Switch to edit mode";
+    this._editModeBtn.setAttribute("aria-label", "Switch to edit mode");
   }
 
   _toggleEditMode() {
@@ -4090,6 +4114,108 @@ function defaultConditionalFormatColors(themeMode) {
   return { backgroundColor: "#dbe8ff", color: "#183a66" };
 }
 
+function demoConditionalFormats(themeMode) {
+  const theme = normalizeThemeMode(themeMode);
+  if (theme === "light") {
+    return [
+      {
+        colIndex: 5,
+        op: ">",
+        value: "1200",
+        backgroundColor: "#dff7ea",
+        color: "#145c3d",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "HOLD",
+        backgroundColor: "#fff1c2",
+        color: "#6b4500",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "REFUNDED",
+        backgroundColor: "#eadcff",
+        color: "#4f2f83",
+      },
+    ];
+  }
+  if (theme === "warm") {
+    return [
+      {
+        colIndex: 5,
+        op: ">",
+        value: "1200",
+        backgroundColor: "#4a301d",
+        color: "#ffd9ac",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "HOLD",
+        backgroundColor: "#5a2c15",
+        color: "#ffe0bc",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "REFUNDED",
+        backgroundColor: "#49321b",
+        color: "#ffe5bf",
+      },
+    ];
+  }
+  if (theme === "aurora") {
+    return [
+      {
+        colIndex: 5,
+        op: ">",
+        value: "1200",
+        backgroundColor: "#15384a",
+        color: "#dff8ff",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "HOLD",
+        backgroundColor: "#34405f",
+        color: "#e8efff",
+      },
+      {
+        colIndex: 8,
+        op: "=",
+        value: "REFUNDED",
+        backgroundColor: "#20304d",
+        color: "#dcecff",
+      },
+    ];
+  }
+  return [
+    {
+      colIndex: 5,
+      op: ">",
+      value: "1200",
+      backgroundColor: "#173b2f",
+      color: "#b7f7d8",
+    },
+    {
+      colIndex: 8,
+      op: "=",
+      value: "HOLD",
+      backgroundColor: "#4a1b1f",
+      color: "#ffd0d7",
+    },
+    {
+      colIndex: 8,
+      op: "=",
+      value: "REFUNDED",
+      backgroundColor: "#332047",
+      color: "#ead7ff",
+    },
+  ];
+}
+
 window.setAppTheme = function setAppTheme(mode) {
   const theme = normalizeThemeMode(mode);
   document.documentElement.setAttribute("data-theme", theme);
@@ -4314,29 +4440,7 @@ if (grid._opts.demo_mode === "chunked") {
 
   setTimeout(() => {
     grid.setData(demo);
-    grid.setConditionalFormats([
-      {
-        colIndex: 5,
-        op: ">",
-        value: "1200",
-        backgroundColor: "#173b2f",
-        color: "#b7f7d8",
-      },
-      {
-        colIndex: 8,
-        op: "=",
-        value: "HOLD",
-        backgroundColor: "#4a1b1f",
-        color: "#ffd0d7",
-      },
-      {
-        colIndex: 8,
-        op: "=",
-        value: "REFUNDED",
-        backgroundColor: "#332047",
-        color: "#ead7ff",
-      },
-    ]);
+    grid.setConditionalFormats(demoConditionalFormats(grid._readThemeMode()));
     grid.setLoading(false);
   }, 250);
 }
