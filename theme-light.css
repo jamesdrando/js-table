@@ -1,288 +1,61 @@
+/*
+ * Legacy light-theme compatibility file.
+ *
+ * The canonical shadcn-inspired light tokens live in theme.css and the
+ * component-level presentation lives in styles.css. Keep this file neutral so
+ * older demos that still include theme-light.css do not restore the old pink
+ * theme.
+ */
+
 html[data-theme="light"] body {
-  background:
-    radial-gradient(circle at top, rgba(255, 47, 109, 0.18), transparent 38%),
-    linear-gradient(180deg, #ffd9e6, #f7d8e4 62%);
+  background: var(--theme-bg-canvas);
 }
 
 html[data-theme="light"] .vgt {
-  --vgt-border: #ff7fa9;
-  --vgt-bg: #fff7fa;
-  --vgt-head-bg: linear-gradient(180deg, #ffd7e5, #ffc3d8);
-  --vgt-hover: #ffe3ec;
-  --vgt-muted: #7a4b5d;
-  background: linear-gradient(180deg, #fff7fa, #ffdce8);
-  color: #2a0c16;
-  border-color: #ff7fa9;
-  box-shadow:
-    0 20px 42px rgba(228, 0, 82, 0.18),
-    0 0 0 1px rgba(255, 47, 109, 0.18);
+  --vgt-border: var(--theme-border);
+  --vgt-bg: var(--theme-surface-1);
+  --vgt-head-bg: var(--theme-surface-2);
+  --vgt-hover: var(--vgt-control-hover, var(--theme-surface-3));
+  --vgt-muted: var(--theme-text-muted);
+  background: var(--theme-surface-1);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
+  box-shadow: var(--theme-shadow-lg);
 }
 
-html[data-theme="light"] .vgt__toolbar {
-  background: linear-gradient(180deg, #ffbfd4, #ff9fbe);
-}
-
-html[data-theme="light"] .vgt__btn {
-  color: #5b142a;
-}
-
-html[data-theme="light"] .vgt__headBumper {
-  border-right-color: #ff7fa9;
-  border-bottom-color: #ff7fa9;
-  background-color: #ff9ebe;
-  background: linear-gradient(180deg, #ff9ebe, #ff6f9f);
-}
-
-html[data-theme="light"] .vgt__headBumper:hover {
-  background: linear-gradient(180deg, #ff84ab, #ff4f87);
-}
-
-html[data-theme="light"] .vgt__headBumper[data-active="1"] {
-  background: linear-gradient(180deg, #2a0c16, #12060b);
-  box-shadow: inset 0 0 0 1px rgba(255, 209, 225, 0.96);
-}
-
-html[data-theme="light"] .vgt__hcell {
-  border-right-color: #ff7fa9;
-  color: #4d1024;
-}
-
-html[data-theme="light"] .vgt__hcell:hover {
-  background: rgba(255, 47, 109, 0.14);
-}
-
-html[data-theme="light"] .vgt__hcell.vgt__hcell--selected {
-  background: rgba(255, 47, 109, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 47, 109, 0.45);
-}
-
-html[data-theme="light"] .vgt__sort {
-  color: #d41458;
-}
-
-html[data-theme="light"] .vgt__filterBtn {
-  border-color: rgba(255, 47, 109, 0.42);
-  background: #fff1f6;
-  color: #b20045;
-}
-
-html[data-theme="light"] .vgt__filterBtn[data-active="1"] {
-  background: #ffcadc;
-  border-color: #ff2f6d;
-  color: #8a0034;
-}
-
-html[data-theme="light"] .vgt__filterBtn:hover {
-  background: #ffdbe7;
-}
-
-html[data-theme="light"] .vgt__rowBumpers {
-  border-right-color: #ff7fa9;
-  background: linear-gradient(180deg, #fff0f5, #ffdce7);
-}
-
-html[data-theme="light"] .vgt__rowBumper {
-  border-bottom-color: #ffb7cf;
-}
-
-html[data-theme="light"] .vgt__rowBumper:hover {
-  background: rgba(255, 47, 109, 0.12);
-}
-
-html[data-theme="light"] .vgt__rowBumper[data-selected="1"] {
-  background: rgba(255, 47, 109, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 47, 109, 0.4);
-}
-
-html[data-theme="light"] .vgt__row {
-  border-bottom-color: #ffb7cf;
-}
-
-html[data-theme="light"] .vgt__row:nth-child(even) {
-  background: #fff0f5;
-}
-
-html[data-theme="light"] .vgt__row[data-loading="1"] .vgt__cell {
-  color: #a05d76;
-}
-
-html[data-theme="light"] .vgt__cell {
-  border-right-color: #ffb7cf;
-  color: #35111c;
-}
-
-html[data-theme="light"] .vgt__cell.vgt__cell--selected {
-  background: rgba(255, 47, 109, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(255, 47, 109, 0.34);
-}
-
-html[data-theme="light"] .vgt__cell.vgt__cell--editing {
-  background: #fff7fa;
-  box-shadow: inset 0 0 0 2px var(--theme-focus);
-}
-
+html[data-theme="light"] .vgt__toolbar,
+html[data-theme="light"] .vgt__footer,
+html[data-theme="light"] .vgt__head,
+html[data-theme="light"] .vgt__rowBumpers,
 html[data-theme="light"] .vgt__scroll,
 html[data-theme="light"] .vgt__hscroll,
 html[data-theme="light"] .vgt__corner {
-  background: rgba(255, 244, 248, 0.96);
+  background: var(--theme-surface-2);
 }
 
-html[data-theme="light"] .vgt__scroll {
-  border-left-color: rgba(255, 47, 109, 0.24);
-}
-
+html[data-theme="light"] .vgt__headBumper,
+html[data-theme="light"] .vgt__hcell,
+html[data-theme="light"] .vgt__rowBumpers,
+html[data-theme="light"] .vgt__row,
+html[data-theme="light"] .vgt__rowBumper,
+html[data-theme="light"] .vgt__cell,
+html[data-theme="light"] .vgt__scroll,
 html[data-theme="light"] .vgt__hscroll,
 html[data-theme="light"] .vgt__corner {
-  border-top-color: rgba(255, 47, 109, 0.24);
+  border-color: var(--vgt-grid-line, var(--theme-border));
 }
 
-html[data-theme="light"] .vgt__corner {
-  border-left-color: rgba(255, 47, 109, 0.24);
-}
-
-html[data-theme="light"] .vgt__htrack,
-html[data-theme="light"] .vgt__track {
-  background: rgba(255, 127, 169, 0.24);
-}
-
-html[data-theme="light"] .vgt__hthumb,
-html[data-theme="light"] .vgt__thumb {
-  background: linear-gradient(180deg, #ff4b86, #ff0f5a);
-}
-
-html[data-theme="light"] .vgt__hthumb:hover,
-html[data-theme="light"] .vgt__thumb:hover {
-  background: linear-gradient(180deg, #ff76a3, #ff2f6d);
-}
-
-html[data-theme="light"] .vgt__sbtn {
-  color: #d41458;
-}
-
-html[data-theme="light"] .vgt__overlay {
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 239, 245, 0.92),
-    rgba(255, 239, 245, 0.92)
-  );
-}
-
-html[data-theme="light"] .vgt__copyFab {
-  border-color: #ff2f6d;
-  background: linear-gradient(180deg, #ff4b86, #ff0f5a);
-  color: #fff6fa;
-  box-shadow: 0 12px 28px rgba(228, 0, 82, 0.22);
-}
-
-html[data-theme="light"] .vgt__copyFab--headers {
-  background: linear-gradient(180deg, #5f182f, #390d1c);
-  border-color: #8b3352;
-}
-
-html[data-theme="light"] .vgt__copyFab[data-copied="1"] {
-  background: linear-gradient(180deg, #ff76a3, #ff2f6d);
-  border-color: #ff8db6;
-}
-
-html[data-theme="light"] .vgt__ctxMenu {
-  border-color: #ff7fa9;
-  background: #fff7fa;
-  box-shadow: 0 16px 34px rgba(228, 0, 82, 0.14);
-}
-
-html[data-theme="light"] .vgt__ctxMenuItem {
-  color: #35111c;
-}
-
-html[data-theme="light"] .vgt__ctxMenuItem:hover {
-  border-color: #ff5b95;
-  background: #ffe7ef;
-}
-
-html[data-theme="light"] .vgt__filterMenu {
-  border-color: #ff7fa9;
-  background: #fff7fa;
-  box-shadow: 0 16px 34px rgba(228, 0, 82, 0.12);
-}
-
-html[data-theme="light"] .vgt__themeMenu {
-  border-color: #ff7fa9;
-  background: #fff7fa;
-  box-shadow: 0 16px 34px rgba(228, 0, 82, 0.12);
-}
-
-html[data-theme="light"] .vgt__themeMenuItem {
-  color: #35111c;
-}
-
-html[data-theme="light"] .vgt__themeMenuItem:hover {
-  border-color: #ff5b95;
-  background: #ffdce8;
-}
-
-html[data-theme="light"] .vgt__themeMenuItem:focus,
-html[data-theme="light"] .vgt__themeMenuItem[data-active="1"] {
-  background: #ffe2ee;
-  border-color: #ff5b95;
-}
-
-html[data-theme="light"] .vgt__themeMenuItem--current {
-  color: #8b4c62;
-}
-
-html[data-theme="light"] .vgt__filterTitle {
-  color: #43111f;
-}
-
-html[data-theme="light"] .vgt__filterSection {
-  color: #8b4c62;
-}
-
-html[data-theme="light"] .vgt__filterDivider {
-  border-top-color: #ffb7cf;
-}
-
+html[data-theme="light"] .vgt__filterBtn,
+html[data-theme="light"] .vgt__pill,
+html[data-theme="light"] .vgt__searchSelect,
+html[data-theme="light"] .vgt__searchInput,
 html[data-theme="light"] .vgt__filterOp,
 html[data-theme="light"] .vgt__filterInput,
 html[data-theme="light"] .vgt__formatColorInput,
-html[data-theme="light"] .vgt__searchSelect,
-html[data-theme="light"] .vgt__searchInput {
-  border-color: #ff9fbe;
-  background: #fff1f6;
-  color: #3a0f1b;
-}
-
-html[data-theme="light"] .vgt__formatColorField {
-  color: #8b4c62;
-}
-
-html[data-theme="light"] .vgt__footer {
-  background: linear-gradient(180deg, #ffd0df, #ffb3ca);
-}
-
-html[data-theme="light"] .vgt__pill {
-  border-color: #ff7fa9;
-  background: linear-gradient(180deg, #fff0f5, #ffdce8);
-  color: #4a1325;
-}
-
-html[data-theme="light"] .vgt__searchInput::placeholder {
-  color: #a56279;
-}
-
-html[data-theme="light"] .vgt__ctxMenuItem:focus,
-html[data-theme="light"] .vgt__filterBtn:focus,
-html[data-theme="light"] .vgt__searchSelect:focus,
-html[data-theme="light"] .vgt__searchInput:focus,
-html[data-theme="light"] .vgt__filterOp:focus,
-html[data-theme="light"] .vgt__filterInput:focus,
-html[data-theme="light"] .vgt__formatColorInput:focus {
-  border-color: #ff2f6d;
-  box-shadow: 0 0 0 2px rgba(255, 47, 109, 0.18);
-}
-
-@media (pointer: coarse) {
-  html[data-theme="light"] .vgt__copyFab[data-copied="1"]::after {
-    color: #fff6fa;
-  }
+html[data-theme="light"] .vgt__ctxMenu,
+html[data-theme="light"] .vgt__filterMenu,
+html[data-theme="light"] .vgt__themeMenu {
+  background: var(--theme-surface-1);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
 }

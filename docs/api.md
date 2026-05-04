@@ -432,3 +432,27 @@ Demo-page helper that sets `document.documentElement.dataset.theme`.
 **Returns**
 
 - `"light" | "chrome-dark" | "warm" | "aurora"`
+
+## React wrapper
+
+The `/react` folder exports a `VirtualGridTable` React component that wraps the browser class without changing table behavior.
+
+```jsx
+import { VirtualGridTable } from "./react";
+
+<VirtualGridTable
+  style={{ width: "100%", height: 520 }}
+  options={{ rowHeight: 28, visibleCols: 6 }}
+  data={rows}
+/>;
+```
+
+Useful props:
+
+- `options` — constructor options, read on mount
+- `data` — calls `setData(data)`
+- `chunkMode` — calls `setChunkMode(config)`
+- `loading`, `search`, `searchColumn`, `filter`, `columnFilters`, `conditionalFormats`, `cellClass`, `editable` — mapped to the matching table methods
+- `scriptSrc` — optional URL to load `/app.js` when `window.VirtualGridTable` is not already present
+- `VirtualGridTableClass` — optional constructor override
+- forwarded `ref` — receives the underlying table instance

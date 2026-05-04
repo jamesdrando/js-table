@@ -4068,7 +4068,9 @@ class VirtualGridTable {
   }
 }
 
-window.VirtualGridTable = VirtualGridTable;
+if (typeof window !== "undefined") {
+  window.VirtualGridTable = VirtualGridTable;
+}
 
 const VGT_THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -4216,11 +4218,13 @@ function demoConditionalFormats(themeMode) {
   ];
 }
 
-window.setAppTheme = function setAppTheme(mode) {
-  const theme = normalizeThemeMode(mode);
-  document.documentElement.setAttribute("data-theme", theme);
-  return theme;
-};
+if (typeof window !== "undefined") {
+  window.setAppTheme = function setAppTheme(mode) {
+    const theme = normalizeThemeMode(mode);
+    document.documentElement.setAttribute("data-theme", theme);
+    return theme;
+  };
+}
 
 function pick(list, index) {
   return list[index % list.length];
@@ -4381,66 +4385,79 @@ function buildDemoTransaction(index) {
   };
 }
 
-const grid = new VirtualGridTable("grid", {
-  rowHeight: 28,
-  visibleCols: 6,
-  overscan: 2,
-  editable: true,
-  demo_mode: true,
-  demo_rows: 50000,
-});
+function initVirtualGridTableDemo() {
+  const demoHost = document.getElementById("grid");
+  if (!demoHost || demoHost.dataset.vgtDemo !== "true") return;
 
-if (grid._opts.demo_mode === "chunked") {
-  grid.setLoading(true);
-  grid.setChunkMode({
-    columns: [
-      { key: "id", label: "id" },
-      { key: "title", label: "title" },
-      { key: "price", label: "price" },
-      { key: "category", label: "category" },
-      { key: "brand", label: "brand" },
-      { key: "rating", label: "rating" },
-      { key: "stock", label: "stock" },
-    ],
-    totalRows: 0,
-    chunkSize: 50,
-    async fetchChunk(request) {
-      const limit = request.size;
-      const skip = request.start;
-      const url = `https://dummyjson.com/products?limit=${limit}&skip=${skip}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Chunk fetch failed (${response.status}): ${url}`);
-      }
-
-      const payload = await response.json();
-      return {
-        start: payload.skip ?? skip,
-        totalRows: payload.total ?? 0,
-        rows: (payload.products ?? []).map((item) => [
-          item.id,
-          item.title,
-          item.price,
-          item.category,
-          item.brand,
-          item.rating,
-          item.stock,
-        ]),
-      };
-    },
+  const grid = new VirtualGridTable("grid", {
+    rowHeight: 28,
+    visibleCols: 6,
+    overscan: 2,
+    editable: true,
+    demo_mode: true,
+    demo_rows: 50000,
   });
-  grid.setLoading(false);
-} else if (grid._opts.demo_mode === true) {
-  grid.setLoading(true);
 
-  const demo = [];
-  for (let i = 0; i < grid._opts.demo_rows; i += 1) {
-    demo.push(buildDemoTransaction(i));
-  }
+  if (grid._opts.demo_mode === "chunked") {
+    grid.setLoading(true);
+    grid.setChunkMode({
+      columns: [
+        { key: "id", label: "id" },
+        { key: "title", label: "title" },
+        { key: "price", label: "price" },
+        { key: "category", label: "category" },
+        { key: "brand", label: "brand" },
+        { key: "rating", label: "rating" },
+        { key: "stock", label: "stock" },
+      ],
+      totalRows: 0,
+      chunkSize: 50,
+      async fetchChunk(request) {
+        const limit = request.size;
+        const skip = request.start;
+        const url = `https://dummyjson.com/products?limit=${limit}&skip=${skip}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Chunk fetch failed (${response.status}): ${url}`);
+        }
 
-  setTimeout(() => {
-    grid.setData(demo);
-    grid.setConditionalFormats(demoConditionalFormats(grid._readThemeMode()));
+        const payload = await response.json();
+        return {
+          start: payload.skip ?? skip,
+          totalRows: payload.total ?? 0,
+          rows: (payload.products ?? []).map((item) => [
+            item.id,
+            item.title,
+            item.price,
+            item.category,
+            item.brand,
+            item.rating,
+            item.stock,
+          ]),
+        };
+      },
+    });
     grid.setLoading(false);
-  }, 250);
+  } else if (grid._opts.demo_mode === true) {
+    grid.setLoading(true);
+
+    const demo = [];
+    for (let i = 0; i < grid._opts.demo_rows; i += 1) {
+      demo.push(buildDemoTransaction(i));
+    }
+
+    setTimeout(() => {
+      grid.setData(demo);
+      grid.setConditionalFormats(demoConditionalFormats(grid._readThemeMode()));
+      grid.setLoading(false);
+    }, 250);
+  }
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initVirtualGridTableDemo, { once: true });
+  } else {
+    initVirtualGridTableDemo();
+  }
 }

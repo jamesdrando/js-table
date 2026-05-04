@@ -117,6 +117,25 @@ window.setAppTheme("warm");
 window.setAppTheme("aurora");
 ```
 
+## Recipe: mount from React
+
+```jsx
+import { VirtualGridTable } from "./react";
+
+export function OrdersGrid({ rows }) {
+  return (
+    <VirtualGridTable
+      style={{ width: "100%", height: 520 }}
+      options={{ rowHeight: 28, visibleCols: 5, editable: true }}
+      data={rows}
+      searchColumn={-1}
+    />
+  );
+}
+```
+
+If `app.js` is not already loaded, pass `scriptSrc="/app.js"` or provide `VirtualGridTableClass`.
+
 ## Recipe: read scroll offsets
 
 ```js

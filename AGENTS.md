@@ -1,13 +1,13 @@
 # js-table agent guide
 
-`js-table` currently ships as a browser-only `VirtualGridTable` class defined in `/app.js` and exposed on `window.VirtualGridTable`. It renders large datasets with row virtualization, horizontal scrolling, search, sorting, column filters, selection, and clipboard copy. It supports fully local data or chunked/remote loading driven by your callbacks.
+`js-table` ships a browser `VirtualGridTable` class defined in `/app.js` and exposed on `window.VirtualGridTable`. It renders large datasets with row virtualization, horizontal scrolling, search, sorting, column filters, selection, local editing, and clipboard copy. It supports fully local data or chunked/remote loading driven by your callbacks. A thin React lifecycle wrapper lives in `/react`.
 
 ## What it does not do
 
 - It does **not** currently ship TypeScript types.
-- It does **not** provide npm, ESM, or CommonJS packaging right now.
+- It does **not** provide npm packaging or module exports for the core `/app.js` class right now.
 - It does **not** virtualize columns; only rows are pooled.
-- It does **not** provide frozen columns, grouped rows, editable cells, or framework adapters.
+- It does **not** provide frozen columns, grouped rows, or multiple framework adapters.
 - It does **not** serialize custom `setFilter(fn)` logic for remote providers.
 
 ## Canonical docs
@@ -16,6 +16,7 @@
 - Rendering model and data flow: [`./docs/architecture.md`](./docs/architecture.md)
 - Common usage patterns: [`./docs/cookbook.md`](./docs/cookbook.md)
 - Agent entry points: [`./llms.txt`](./llms.txt), [`./llms-full.txt`](./llms-full.txt)
+- React wrapper notes: [`./react/README.md`](./react/README.md)
 
 ## Common tasks
 
@@ -88,9 +89,26 @@ grid.setChunkMode({
 grid.destroy();
 ```
 
+### 6. Use the React wrapper
+
+```jsx
+import { VirtualGridTable } from "./react";
+
+export function OrdersGrid({ rows }) {
+  return (
+    <VirtualGridTable
+      style={{ width: "100%", height: 520 }}
+      options={{ rowHeight: 28, visibleCols: 6 }}
+      data={rows}
+    />
+  );
+}
+```
+
 ## Gotchas
 
 - The constructor takes a **container element id string**, not an `HTMLElement`.
+- The React wrapper handles the id and calls `destroy()` on unmount.
 - `setData([])` produces an empty table because columns are inferred from the first object.
 - In local mode, row order is `filter -> column filters -> search -> sort`.
 - In chunked mode, request objects include `query`, `searchColumn`, `sort`, and `columnFilters`; your provider must apply those server-side if you want matching results.

@@ -2,14 +2,15 @@
 
 ## What this project is
 
-`js-table` is a browser-only virtual table/grid implemented in `/app.js`. It exposes `window.VirtualGridTable`, mounts into a container by id, and supports local data or chunked remote data.
+`js-table` is a browser virtual table/grid implemented in `/app.js`. It exposes `window.VirtualGridTable`, mounts into a container by id, and supports local data or chunked remote data. A thin React lifecycle wrapper lives in `/react`.
 
 ## What this project is not
 
 - No TypeScript support
-- No npm package or module exports
+- No npm package; the core `/app.js` class is still exposed as a browser global
 - No column virtualization
-- No frozen columns, grouped rows, or editable cells
+- No frozen columns or grouped rows
+- No framework adapters beyond the React wrapper
 
 ## Constructor
 
@@ -26,6 +27,7 @@
 - `options.totalRows`: initial total for chunked mode, default `0`
 - `options.onChunkRequest`: optional callback for chunk requests
 - `options.fetchChunk`: optional sync/async chunk provider
+- `options.editable`: enables local-cell editing controls
 
 ## Core methods
 
@@ -38,6 +40,11 @@
 - `clearFilter()`
 - `setColumnFilter(index, { op, value, valueTo? })`
 - `clearColumnFilters()`
+- `setCellClass(fn)`
+- `setEditable(boolean)`
+- `setConditionalFormat(index, formatSpec)`
+- `setConditionalFormats(formatSpecs)`
+- `clearConditionalFormats(index?)`
 - `sortBy(index, "asc" | "desc" | null)`
 - `clearSort()`
 - `setChunkMode({ columns, totalRows, chunkSize, onChunkRequest?, fetchChunk? })`
@@ -113,6 +120,7 @@ Accepted responses:
 ## High-signal gotchas
 
 - Pass a container id string, not an element.
+- The React wrapper generates the id and destroys the instance on unmount.
 - `setData([])` yields zero columns because inference uses the first row.
 - Chunked mode does not run local search/filter/sort over cached rows; providers must honor request state.
 - `setFilter(fn)` does not serialize into chunk requests.

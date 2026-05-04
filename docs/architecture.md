@@ -5,6 +5,7 @@
 - Implementation file: `/app.js`
 - Public browser globals: `window.VirtualGridTable`, `window.setAppTheme`
 - Mount target: existing DOM node identified by id
+- React wrapper: `/react`, which creates and destroys the same browser class from component lifecycle
 
 ## Rendering model
 
@@ -93,6 +94,7 @@ A `ResizeObserver` watches the body area. On resize, the table remeasures the vi
 ## Important constraints
 
 - Constructor input is a container id string, not a DOM node
+- The React wrapper owns that id and forwards a ref to the underlying table instance
 - Empty object-array datasets cannot infer columns
 - Chunked mode does not run local search/sort/filter against cached rows
 - Custom filter callbacks are not serializable for remote providers
