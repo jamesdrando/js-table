@@ -2,4 +2,4 @@
 
 **Demo:** https://jamesdrando.github.io/js-table/
 
-`js-table` exposes `window.VirtualGridTable` for plain browser usage and includes a thin React wrapper in [`./react`](./react).
+`js-table` exports `VirtualGridTable` as an ESM library, includes a browser-global adapter at `./app.js`, and includes a thin React wrapper in [`./react`](./react).

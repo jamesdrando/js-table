@@ -13,10 +13,11 @@
 
 ## Important constraints
 
-- Global browser API: `window.VirtualGridTable`
+- ESM API: `import { VirtualGridTable } from "js-virtual-grid-table"`
+- Browser global adapter: `./app.js` exposes `window.VirtualGridTable`
 - React wrapper: `./react`
 - Constructor takes a container **id string**
 - No TypeScript support currently
-- No npm package currently; the core `/app.js` class is still exposed as a browser global
+- Package entry: `./src/index.js`
 - Row virtualization only
 - Chunked mode expects the provider to apply search/sort/filter state

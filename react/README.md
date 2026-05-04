@@ -1,6 +1,6 @@
 # React wrapper
 
-This folder contains a small React lifecycle wrapper around the existing browser `VirtualGridTable` class. It does not fork table behavior; it creates, updates, exposes, and destroys the imperative instance from React.
+This folder contains a small React lifecycle wrapper around the core `VirtualGridTable` class. It does not fork table behavior; it creates, updates, exposes, and destroys the imperative instance from React.
 
 Include the core CSS somewhere in your app:
 
@@ -9,7 +9,7 @@ import "../theme.css";
 import "../styles.css";
 ```
 
-Use an already-loaded global:
+Use the wrapper:
 
 ```jsx
 import { VirtualGridTable } from "./react";
@@ -24,17 +24,6 @@ export function OrdersGrid({ rows }) {
     />
   );
 }
-```
-
-Or let the wrapper load `app.js` from your public assets:
-
-```jsx
-<VirtualGridTable
-  scriptSrc="/app.js"
-  style={{ width: "100%", height: 520 }}
-  options={{ rowHeight: 28 }}
-  data={rows}
-/>
 ```
 
 The forwarded ref is the underlying `VirtualGridTable` instance:

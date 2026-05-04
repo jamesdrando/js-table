@@ -1,11 +1,10 @@
 # js-table agent guide
 
-`js-table` ships a browser `VirtualGridTable` class defined in `/app.js` and exposed on `window.VirtualGridTable`. It renders large datasets with row virtualization, horizontal scrolling, search, sorting, column filters, selection, local editing, and clipboard copy. It supports fully local data or chunked/remote loading driven by your callbacks. A thin React lifecycle wrapper lives in `/react`.
+`js-table` ships an ESM `VirtualGridTable` class defined in `/src/VirtualGridTable.js` and exported from `/src/index.js`. It renders large datasets with row virtualization, horizontal scrolling, search, sorting, column filters, selection, local editing, and clipboard copy. It supports fully local data or chunked/remote loading driven by your callbacks. A browser-global adapter lives at `/app.js`, the demo bootstrap lives in `/demo/demo.js`, and a thin React lifecycle wrapper lives in `/react`.
 
 ## What it does not do
 
 - It does **not** currently ship TypeScript types.
-- It does **not** provide npm packaging or module exports for the core `/app.js` class right now.
 - It does **not** virtualize columns; only rows are pooled.
 - It does **not** provide frozen columns, grouped rows, or multiple framework adapters.
 - It does **not** serialize custom `setFilter(fn)` logic for remote providers.
@@ -24,14 +23,15 @@
 
 ```html
 <div id="grid"></div>
-<script src="./app.js"></script>
-<script>
+<script type="module">
+  import { VirtualGridTable } from "./src/index.js";
+
   const rows = [
     { id: 1, name: "Ada", status: "PAID" },
     { id: 2, name: "Linus", status: "HOLD" }
   ];
 
-  const grid = new window.VirtualGridTable("grid", {
+  const grid = new VirtualGridTable("grid", {
     rowHeight: 28,
     visibleCols: 4
   });

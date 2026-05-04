@@ -7,44 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-
-const scriptLoaders = new Map();
-
-function loadScript(src) {
-  if (!src) return Promise.resolve();
-  if (scriptLoaders.has(src)) return scriptLoaders.get(src);
-
-  const promise = new Promise((resolve, reject) => {
-    const existing = Array.from(document.scripts).find((script) => script.dataset.vgtReactSrc === src);
-    if (existing) {
-      if (existing.dataset.loaded === "true") {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", resolve, { once: true });
-      existing.addEventListener("error", reject, { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.dataset.vgtReactSrc = src;
-    script.addEventListener(
-      "load",
-      () => {
-        script.dataset.loaded = "true";
-        resolve();
-      },
-      { once: true }
-    );
-    script.addEventListener("error", reject, { once: true });
-    document.head.append(script);
-  });
-
-  scriptLoaders.set(src, promise);
-  return promise;
-}
+import { VirtualGridTable as CoreVirtualGridTable } from "../src/index.js";
 
 function normalizeReactId(id) {
   return id.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -71,15 +34,6 @@ function eachColumnFilter(columnFilters, apply) {
   });
 }
 
-async function resolveGridClass({ scriptSrc, VirtualGridTableClass }) {
-  if (VirtualGridTableClass) return VirtualGridTableClass;
-  if (typeof window === "undefined") return null;
-  if (window.VirtualGridTable) return window.VirtualGridTable;
-
-  await loadScript(scriptSrc);
-  return window.VirtualGridTable || null;
-}
-
 export const VirtualGridTable = forwardRef(function VirtualGridTable(
   {
     id,
@@ -96,10 +50,8 @@ export const VirtualGridTable = forwardRef(function VirtualGridTable(
     conditionalFormats,
     cellClass,
     editable,
-    scriptSrc,
     VirtualGridTableClass,
     onReady,
-    onError,
     ...divProps
   },
   ref
@@ -108,43 +60,24 @@ export const VirtualGridTable = forwardRef(function VirtualGridTable(
   const gridId = useMemo(() => id || `vgt-react-${normalizeReactId(generatedId)}`, [generatedId, id]);
   const instanceRef = useRef(null);
   const [instance, setInstance] = useState(null);
-  const [mountError, setMountError] = useState(null);
 
   useImperativeHandle(ref, () => instance, [instance]);
 
-  if (mountError) throw mountError;
-
   useEffect(() => {
-    let cancelled = false;
-
-    resolveGridClass({ scriptSrc, VirtualGridTableClass })
-      .then((GridClass) => {
-        if (cancelled) return;
-        if (!GridClass) {
-          throw new Error(
-            "VirtualGridTable React wrapper requires window.VirtualGridTable, a scriptSrc, or VirtualGridTableClass."
-          );
-        }
-
-        const grid = new GridClass(gridId, options);
-        instanceRef.current = grid;
-        setInstance(grid);
-        if (typeof onReady === "function") onReady(grid);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        if (typeof onError === "function") onError(error);
-        else setMountError(error);
-      });
+    const GridClass = VirtualGridTableClass || CoreVirtualGridTable;
+    const grid = new GridClass(gridId, options);
+    instanceRef.current = grid;
+    setInstance(grid);
+    if (typeof onReady === "function") onReady(grid);
 
     return () => {
-      cancelled = true;
       if (instanceRef.current) {
         instanceRef.current.destroy();
         instanceRef.current = null;
+        setInstance(null);
       }
     };
-  }, [VirtualGridTableClass, gridId, scriptSrc]);
+  }, [VirtualGridTableClass, gridId]);
 
   useEffect(() => {
     if (!instance || chunkMode == null) return;

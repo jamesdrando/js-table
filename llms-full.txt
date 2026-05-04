@@ -2,17 +2,20 @@
 
 ## What this project is
 
-`js-table` is a browser virtual table/grid implemented in `/app.js`. It exposes `window.VirtualGridTable`, mounts into a container by id, and supports local data or chunked remote data. A thin React lifecycle wrapper lives in `/react`.
+`js-table` is a browser virtual table/grid implemented in `/src/VirtualGridTable.js` and exported from `/src/index.js`. It mounts into a container by id and supports local data or chunked remote data. A browser-global adapter lives at `/app.js`, the demo bootstrap lives in `/demo/demo.js`, and a thin React lifecycle wrapper lives in `/react`.
 
 ## What this project is not
 
 - No TypeScript support
-- No npm package; the core `/app.js` class is still exposed as a browser global
 - No column virtualization
 - No frozen columns or grouped rows
 - No framework adapters beyond the React wrapper
 
 ## Constructor
+
+```js
+import { VirtualGridTable } from "js-virtual-grid-table";
+```
 
 ### `new VirtualGridTable(containerId, options?)`
 

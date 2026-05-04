@@ -1,0 +1,70 @@
+{
+  "name": "js-virtual-grid-table",
+  "version": "0.1.0",
+  "description": "Browser virtual grid table with row virtualization, local querying, chunked loading, selection, editing, clipboard copy, and a React wrapper.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://jamesdrando.github.io/js-table/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jamesdrando/js-table.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jamesdrando/js-table/issues"
+  },
+  "keywords": [
+    "table",
+    "grid",
+    "virtualized",
+    "virtual-scroll",
+    "react",
+    "data-grid"
+  ],
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./global": "./app.js",
+    "./app.js": "./app.js",
+    "./src/VirtualGridTable": "./src/VirtualGridTable.js",
+    "./react": "./react/index.js",
+    "./react/VirtualGridTable": "./react/VirtualGridTable.jsx",
+    "./styles.css": "./styles.css",
+    "./theme.css": "./theme.css",
+    "./theme-light.css": "./theme-light.css",
+    "./docs/api": "./docs/api.md",
+    "./docs/architecture": "./docs/architecture.md",
+    "./docs/cookbook": "./docs/cookbook.md",
+    "./llms.txt": "./llms.txt",
+    "./llms-full.txt": "./llms-full.txt"
+  },
+  "files": [
+    "src",
+    "app.js",
+    "styles.css",
+    "theme.css",
+    "theme-light.css",
+    "react",
+    "docs",
+    "README.md",
+    "llms.txt",
+    "llms-full.txt"
+  ],
+  "sideEffects": [
+    "./app.js",
+    "./styles.css",
+    "./theme.css",
+    "./theme-light.css"
+  ],
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "check": "node --check src/VirtualGridTable.js && node --check src/index.js && node --check app.js && node --check demo/demo.js",
+    "pack:dry": "npm pack --dry-run"
+  }
+}

@@ -2,8 +2,9 @@
 
 ## Surface area
 
-- Implementation file: `/app.js`
-- Public browser globals: `window.VirtualGridTable`, `window.setAppTheme`
+- Core implementation file: `/src/VirtualGridTable.js`
+- Public module entry: `/src/index.js`
+- Browser global adapter: `/app.js`, which assigns `window.VirtualGridTable` and `window.setAppTheme`
 - Mount target: existing DOM node identified by id
 - React wrapper: `/react`, which creates and destroys the same browser class from component lifecycle
 

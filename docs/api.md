@@ -26,13 +26,12 @@ Creates and mounts a virtual grid into an existing DOM element.
 - `options.deleteSelection` `boolean` — enables Delete/Backspace clearing when editable, default `true`
 - `options.onCellsChange` `(changes) => void` — optional callback after local cell values change
 - `options.historyLimit` `number` — number of undo/redo operations kept, default `20`
-- `options.demo_mode` `boolean | "chunked"` — demo-only option used by the sample page
-- `options.demo_rows` `number` — demo-only row count used by the sample page
-
 **Example**
 
 ```js
-const grid = new window.VirtualGridTable("grid", {
+import { VirtualGridTable } from "js-virtual-grid-table";
+
+const grid = new VirtualGridTable("grid", {
   rowHeight: 28,
   visibleCols: 6,
   overscan: 2
@@ -413,15 +412,52 @@ Returns the current scroll offsets.
 
 Disconnects observers, removes listeners, closes menus, and removes the rendered root node.
 
+## Module exports
+
+### `VirtualGridTable`
+
+The public class constructor.
+
+```js
+import { VirtualGridTable } from "js-virtual-grid-table";
+```
+
+### `setAppTheme(mode, root?)`
+
+Helper that sets `data-theme` on `document.documentElement`, or on a supplied root element.
+
+**Parameters**
+
+- `mode` `"light" | "dark" | "chrome-dark" | "warm" | "aurora"`
+- `root` optional element that receives the `data-theme` attribute
+
+`"dark"` is an alias for `"chrome-dark"`.
+
+**Returns**
+
+- `"light" | "chrome-dark" | "warm" | "aurora"`
+
+### `normalizeThemeMode(mode)`
+
+Normalizes aliases and invalid values to a supported theme mode.
+
+### `defaultConditionalFormatColors(mode)`
+
+Returns the default conditional-format colors for the active theme.
+
 ## Browser globals
 
 ### `window.VirtualGridTable`
 
-The public class constructor.
+Available when loading the global adapter:
+
+```html
+<script type="module" src="./app.js"></script>
+```
 
 ### `window.setAppTheme(mode)`
 
-Demo-page helper that sets `document.documentElement.dataset.theme`.
+Global alias for `setAppTheme`.
 
 **Parameters**
 
@@ -453,6 +489,5 @@ Useful props:
 - `data` — calls `setData(data)`
 - `chunkMode` — calls `setChunkMode(config)`
 - `loading`, `search`, `searchColumn`, `filter`, `columnFilters`, `conditionalFormats`, `cellClass`, `editable` — mapped to the matching table methods
-- `scriptSrc` — optional URL to load `/app.js` when `window.VirtualGridTable` is not already present
 - `VirtualGridTableClass` — optional constructor override
 - forwarded `ref` — receives the underlying table instance

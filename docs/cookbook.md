@@ -4,9 +4,10 @@
 
 ```html
 <div id="grid"></div>
-<script src="./app.js"></script>
-<script>
-  const grid = new window.VirtualGridTable("grid", {
+<script type="module">
+  import { VirtualGridTable } from "./src/index.js";
+
+  const grid = new VirtualGridTable("grid", {
     rowHeight: 28,
     visibleCols: 5
   });
@@ -21,7 +22,7 @@
 ## Recipe: use explicit columns with row arrays
 
 ```js
-const grid = new window.VirtualGridTable("grid");
+const grid = new VirtualGridTable("grid");
 
 grid.setData({
   columns: [
@@ -58,7 +59,7 @@ grid.sortBy(3, "desc");
 ## Recipe: provide chunked data with `fetchChunk`
 
 ```js
-const grid = new window.VirtualGridTable("grid", { rowHeight: 28, overscan: 2 });
+const grid = new VirtualGridTable("grid", { rowHeight: 28, overscan: 2 });
 
 grid.setChunkMode({
   columns: [
@@ -92,7 +93,7 @@ grid.setChunkMode({
 
 ```js
 const host = document.getElementById("grid");
-const grid = new window.VirtualGridTable("grid");
+const grid = new VirtualGridTable("grid");
 
 host.addEventListener("vgt:chunk-request", async (event) => {
   const request = event.detail;
@@ -134,7 +135,7 @@ export function OrdersGrid({ rows }) {
 }
 ```
 
-If `app.js` is not already loaded, pass `scriptSrc="/app.js"` or provide `VirtualGridTableClass`.
+The wrapper imports the core table class directly. Use `VirtualGridTableClass` only when testing or swapping the constructor.
 
 ## Recipe: read scroll offsets
 
